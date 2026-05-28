@@ -63,22 +63,22 @@ Both event types share `EventSessionId`, which is the join key for reconstructin
 
 | # | Query | Use Case | Key Table |
 |---|-------|----------|-----------|
-| 1 | [Agent & Actor Inventory](#query-1-agent--actor-inventory) | Posture | — |
-| 2 | [Prompt Injection / Jailbreak Detection](#query-2-prompt-injection--jailbreak-detection) | Detection | — |
-| 3 | [Session Reconstruction — Prompts + Tool Calls](#query-3-session-reconstruction--prompts--tool-calls) | Investigation | — |
-| 4 | [Tool Invocation Inventory per Agent](#query-4-tool-invocation-inventory-per-agent) | Posture | — |
-| 5 | [MCP `query_lake` Argument Audit](#query-5-mcp-querylake-argument-audit) | Investigation | — |
-| 6 | [Tool Call Failures & Errors](#query-6-tool-call-failures--errors) | Investigation | — |
-| 7 | [New Tool First-Seen — Baseline Deviation](#query-7-new-tool-first-seen--baseline-deviation) | Dashboard | — |
-| 8 | [Channel & User Activity Distribution](#query-8-channel--user-activity-distribution) | Investigation | — |
-| 9 | [a: Cross-Source Base Correlation — prompts ↔ tool calls](#query-9a-cross-source-base-correlation--prompts--tool-calls) | Investigation | `CloudAppEvents` |
-| 9 | [b: Cross-Source High-Signal — prompt injection → downstream tool calls](#query-9b-cross-source-high-signal--prompt-injection--downstream-tool-calls) | Investigation | `CloudAppEvents` |
-| 9 | [c: Cross-Source Per-Session Rollup — safety + tool-use](#query-9c-cross-source-per-session-rollup--safety--tool-use) | Investigation | `CloudAppEvents` |
-| 9 | [d: Cross-Source Safety Audit — every flagged prompt with prompt tex...](#query-9d-cross-source-safety-audit--every-flagged-prompt-with-prompt-text--tool-activity) | Investigation | `CloudAppEvents` |
+| 1 | [Agent & Actor Inventory](#query-1-agent--actor-inventory) | Posture | `UnifiedAgentObservability` |
+| 2 | [Prompt Injection / Jailbreak Detection](#query-2-prompt-injection--jailbreak-detection) | Detection | `UnifiedAgentObservability` |
+| 3 | [Session Reconstruction — Prompts + Tool Calls](#query-3-session-reconstruction--prompts--tool-calls) | Investigation | `UnifiedAgentObservability` |
+| 4 | [Tool Invocation Inventory per Agent](#query-4-tool-invocation-inventory-per-agent) | Posture | `UnifiedAgentObservability` |
+| 5 | [MCP `query_lake` Argument Audit](#query-5-mcp-querylake-argument-audit) | Investigation | `UnifiedAgentObservability` |
+| 6 | [Tool Call Failures & Errors](#query-6-tool-call-failures--errors) | Investigation | `UnifiedAgentObservability` |
+| 7 | [New Tool First-Seen — Baseline Deviation](#query-7-new-tool-first-seen--baseline-deviation) | Dashboard | `UnifiedAgentObservability` |
+| 8 | [Channel & User Activity Distribution](#query-8-channel--user-activity-distribution) | Investigation | `UnifiedAgentObservability` |
+| 9 | [a: Cross-Source Base Correlation — prompts ↔ tool calls](#query-9a-cross-source-base-correlation--prompts--tool-calls) | Investigation | `CloudAppEvents` + `UnifiedAgentObservability` |
+| 9 | [b: Cross-Source High-Signal — prompt injection → downstream tool calls](#query-9b-cross-source-high-signal--prompt-injection--downstream-tool-calls) | Investigation | `CloudAppEvents` + `UnifiedAgentObservability` |
+| 9 | [c: Cross-Source Per-Session Rollup — safety + tool-use](#query-9c-cross-source-per-session-rollup--safety--tool-use) | Investigation | `CloudAppEvents` + `UnifiedAgentObservability` |
+| 9 | [d: Cross-Source Safety Audit — every flagged prompt with prompt tex...](#query-9d-cross-source-safety-audit--every-flagged-prompt-with-prompt-text--tool-activity) | Investigation | `CloudAppEvents` + `UnifiedAgentObservability` |
 | — | [Job 1 — Hourly Jailbreak Incident Promotion (CAE-anchored)](#job-1--hourly-jailbreak-incident-promotion-cae-anchored) | Investigation | `CloudAppEvents` |
-| — | [Job 2 — Hourly `query_lake` Argument Audit](#job-2--hourly-querylake-argument-audit) | Investigation | — |
-| — | [Job 3 — Daily Agent Tool Inventory Snapshot](#job-3--daily-agent-tool-inventory-snapshot) | Posture | — |
-| — | [Job 4 — Daily Agent Tool Failure Rollup](#job-4--daily-agent-tool-failure-rollup) | Investigation | — |
+| — | [Job 2 — Hourly `query_lake` Argument Audit](#job-2--hourly-querylake-argument-audit) | Investigation | `UnifiedAgentObservability` |
+| — | [Job 3 — Daily Agent Tool Inventory Snapshot](#job-3--daily-agent-tool-inventory-snapshot) | Posture | `UnifiedAgentObservability` |
+| — | [Job 4 — Daily Agent Tool Failure Rollup](#job-4--daily-agent-tool-failure-rollup) | Investigation | `UnifiedAgentObservability` |
 | — | [Detection 1 — AI Agent: Prompt Injection / Jailbreak Incident](#detection-1--ai-agent-prompt-injection--jailbreak-incident) | Detection | — |
 | — | [Detection 2 — AI Agent: KQL Access to Sensitive Tables](#detection-2--ai-agent-kql-access-to-sensitive-tables) | Detection | — |
 | — | [Detection 3 — AI Agent: New Tool First-Seen vs 30-Day Baseline](#detection-3--ai-agent-new-tool-first-seen-vs-30-day-baseline) | Dashboard | — |

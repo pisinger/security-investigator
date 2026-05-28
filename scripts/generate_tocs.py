@@ -48,7 +48,7 @@ def extract_table_from_kql(lines: list, start_idx: int) -> str:
             break
         if in_kql:
             # Match table names at start of line or after let/union
-            matches = re.findall(r'\b([A-Z][a-zA-Z]+(?:Events?|Logs?|Info|Indicators?|Activity|Incident|Alert|Graph\w+|Configuration\w+|Vulnerabilit\w+|Inventory|Recommendation|Diagnostics|Score))\b', line)
+            matches = re.findall(r'\b([A-Z][a-zA-Z]+(?:Events?|Logs?|Info|Indicators?|Activity|Incident|Alert|Graph\w+|Configuration\w+|Vulnerabilit\w+|Inventory|Recommendation|Diagnostics|Score|Observability))\b', line)
             for m in matches:
                 if m not in ("TimeGenerated", "Timestamp", "IsInternetFacing", "DeviceName",
                              "AccountName", "RemoteIP", "SourceIP", "True", "False",
