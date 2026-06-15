@@ -1,6 +1,6 @@
 ---
 name: ai-agent-posture
-description: 'Use this skill when asked to audit, assess, or report on AI agent security posture across Copilot Studio and Microsoft 365 Copilot agents. Triggers on keywords like "AI agent posture", "agent security audit", "Copilot Studio agents", "agent inventory", "agent authentication", "unauthenticated agents", "agent tools", "MCP tools on agents", "agent knowledge sources", "XPIA risk", "agent sprawl", "AI agent risk", "agent governance", or when investigating AI agent configurations, access policies, tool permissions, or credential exposure. This skill queries the AIAgentsInfo table in Advanced Hunting to produce a comprehensive security posture assessment covering agent inventory, authentication gaps, access control misconfigurations, MCP tool proliferation, knowledge source exposure, XPIA email exfiltration risk, hard-coded credential detection, HTTP request risks, creator governance, and agent sprawl analysis. Supports inline chat and markdown file output.'
+description: 'Use this skill when asked to audit, assess, or report on AI agent security posture across Copilot Studio, Microsoft 365 Copilot, Microsoft Foundry, and third-party agents. Triggers on keywords like "AI agent posture", "agent security audit", "Copilot Studio agents", "agent inventory", "agent access", "broadly accessible agents", "agent tools", "MCP tools on agents", "agent knowledge sources", "XPIA risk", "agent sprawl", "AI agent risk", "agent governance", or when investigating AI agent configurations, access posture, tool permissions, or credential exposure. This skill queries the AgentsInfo table in Advanced Hunting to produce a comprehensive security posture assessment covering agent inventory, access posture, broadly-accessible agent exposure, MCP tool proliferation, knowledge source exposure, XPIA email exfiltration risk, hard-coded credential detection, external endpoint risks, creator governance, and agent sprawl analysis. Supports inline chat and markdown file output.'
 threat_pulse_domains: [admin, cloud]
 drill_down_prompt: 'Run AI agent security audit — agent inventory, authentication gaps, tool permissions'
 ---
@@ -9,7 +9,9 @@ drill_down_prompt: 'Run AI agent security audit — agent inventory, authenticat
 
 ## Purpose
 
-This skill audits the **security posture of AI agents** (Copilot Studio / Microsoft 365 Copilot) across your organization using the `AIAgentsInfo` table in Microsoft Defender XDR Advanced Hunting.
+This skill audits the **security posture of AI agents** (Copilot Studio, Microsoft 365 Copilot / Agent Builder, Microsoft Foundry, and third-party platforms) across your organization using the `AgentsInfo` table in Microsoft Defender XDR Advanced Hunting.
+
+> **🔄 Table migration (AIAgentsInfo → AgentsInfo):** This skill was migrated from the deprecated `AIAgentsInfo` table to the unified multi-platform `AgentsInfo` table. `AIAgentsInfo` remains queryable until **July 1, 2026**, but it is Copilot Studio-only and uses a different schema. All queries in this skill target `AgentsInfo`. The new table is a **different data model**, not a rename — see [Table Schema Reference](#table-schema-reference) and [Known Pitfalls](#known-pitfalls) for the differences that shaped these queries.
 
 AI agents are autonomous or semi-autonomous applications that can access organizational data, send emails, call external APIs, and use MCP tools. Misconfigured agents — missing authentication, overly broad access, AI-controlled email sending, hard-coded credentials — represent a growing attack surface. This skill systematically evaluates that surface.
 
@@ -18,18 +20,18 @@ AI agents are autonomous or semi-autonomous applications that can access organiz
 | Domain | Key Questions Answered |
 |--------|----------------------|
 | 🔍 **Agent Inventory** | How many agents exist? What's their status, platform, environment? |
-| 🔐 **Authentication & Access** | Which agents lack authentication? What access control policies are in use? |
+| 🔐 **Access Posture** | Which agents are broadly accessible (`allowForAllUsers`)? How are agents shared (`appType`: lob/shared)? |
 | 🛠️ **Tools & MCP** | Which agents have MCP tools? What operations can they perform? |
-| 📚 **Knowledge Sources** | What data sources are agents connected to (SharePoint, public sites, federated)? |
-| 📧 **XPIA Email Risk** | Which agents combine generative orchestration with email sending (data exfil risk)? |
-| 🔑 **Credential Exposure** | Are credentials hard-coded in agent topics or actions? |
-| 🌐 **HTTP Request Risk** | Do agents make HTTP requests to non-standard ports or sensitive endpoints? |
+| 📚 **Knowledge Sources** | What data sources are agents connected to? |
+| 📧 **XPIA Email Risk** | Which agents can send email (data exfil precondition)? |
+| 🔑 **Credential Exposure** | Are credentials hard-coded in agent instructions or connector metadata? |
+| 🌐 **External Endpoint Risk** | What external hosts do agent connectors reach? Any insecure schemes or non-standard ports? |
 | 👥 **Creator Governance** | Who creates agents? Is there naming hygiene? Abandoned agents? |
 
-**Data source:** `AIAgentsInfo` table (Advanced Hunting) — currently in **Preview**.
+**Data source:** `AgentsInfo` table (Advanced Hunting) — currently in **Preview**.
 
 **References:**
-- [Microsoft Docs — AIAgentsInfo table](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-aiagentsinfo-table)
+- [Microsoft Docs — AgentsInfo table](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-agentsinfo-table)
 - [From runtime risk to real-time defense: Securing AI agents](https://www.microsoft.com/en-us/security/blog/2026/01/23/runtime-risk-realtime-defense-securing-ai-agents/) — Microsoft Defender Security Research blog detailing three attack scenarios this skill detects
 - [Microsoft Agent 365: The control plane for AI agents](https://www.microsoft.com/en-us/microsoft-365/blog/2025/11/18/microsoft-agent-365-the-control-plane-for-ai-agents/) — Enterprise governance platform for agent lifecycle management (Registry, Access Control, Visualization, Interoperability, Security)
 - [Securing Copilot Studio agents with Microsoft Defender](https://learn.microsoft.com/en-us/defender-cloud-apps/ai-agent-protection)
@@ -43,7 +45,7 @@ AI agents are autonomous or semi-autonomous applications that can access organiz
 |-------|---------------|
 | `BLOG_RUNTIME_RISK` | `https://www.microsoft.com/en-us/security/blog/2026/01/23/runtime-risk-realtime-defense-securing-ai-agents/` |
 | `BLOG_AGENT_365` | `https://www.microsoft.com/en-us/microsoft-365/blog/2025/11/18/microsoft-agent-365-the-control-plane-for-ai-agents/` |
-| `DOCS_AIAGENTSINFO` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-aiagentsinfo-table` |
+| `DOCS_AGENTSINFO` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-agentsinfo-table` |
 | `DOCS_AGENT_PROTECTION` | `https://learn.microsoft.com/en-us/defender-cloud-apps/ai-agent-protection` |
 | `DOCS_RUNTIME_PROTECTION` | `https://learn.microsoft.com/en-us/defender-cloud-apps/real-time-agent-protection-during-runtime` |
 
@@ -65,9 +67,9 @@ This skill's queries map directly to three attack scenarios documented by Micros
 |---------|--------|
 | **Vector** | Crafted email sent to an agent-monitored mailbox (event trigger) |
 | **Mechanism** | Email contains hidden instructions telling the agent to search knowledge base for sensitive data and exfiltrate via email to attacker |
-| **Preconditions** | Agent uses generative orchestration + email trigger + email-sending tool + knowledge source |
-| **Detection** | Q5 (XPIA Email Risk) detects GenAI + SendEmailV2 agents; Q7 (Knowledge Sources) identifies data exposure |
-| **Skill Signal** | Agents with `IsGenerativeOrchestrationEnabled == true` + `SendEmailV2` tool + event triggers = highest risk |
+| **Preconditions** | Agent can send email (email connector) + has an event/email trigger + a knowledge source |
+| **Detection** | Q5 (XPIA Email Risk) detects email-capable agents via connector operations; Q7 (Knowledge Sources) identifies data exposure |
+| **Skill Signal** | Agents with an email-send operation (e.g., `Office 365 Outlook Send an email (V2)`) + knowledge sources, especially if broadly accessible (`allowForAllUsers == "true"`) = highest risk |
 
 ### Attack Scenario 2: Prompt Injection via Shared Document → Email Exfiltration (XPIA)
 
@@ -75,9 +77,9 @@ This skill's queries map directly to three attack scenarios documented by Micros
 |---------|--------|
 | **Vector** | Malicious insider edits a SharePoint document with crafted instructions |
 | **Mechanism** | Agent processing the document is tricked into reading a sensitive file on a different SharePoint site (that the agent has access to but the attacker doesn't) and emailing contents to attacker-controlled domain |
-| **Preconditions** | Agent has SharePoint knowledge source + email-sending tool + generative orchestration |
-| **Detection** | Q5 (XPIA) + Q7 (Knowledge Sources with SharePoint) identifies the attack surface |
-| **Skill Signal** | `SharePointSearchSource` + `SendEmailV2` + `IsGenerativeOrchestrationEnabled == true` = classic XPIA vector |
+| **Preconditions** | Agent has a knowledge/data source + an email-send connector operation |
+| **Detection** | Q5 (XPIA) + Q7 (Knowledge Sources) identifies the attack surface |
+| **Skill Signal** | A declared data source + an email-send operation (e.g., `Send an email (V2)`) on the same agent = classic XPIA vector |
 
 ### Attack Scenario 3: Capability Reconnaissance on Unauthenticated Agent
 
@@ -85,9 +87,11 @@ This skill's queries map directly to three attack scenarios documented by Micros
 |---------|--------|
 | **Vector** | Attacker interacts with publicly accessible chatbot (no authentication required) |
 | **Mechanism** | Series of crafted prompts to probe and enumerate the agent's tools and knowledge sources, then exploit them to extract sensitive data |
-| **Preconditions** | Agent has `UserAuthenticationType == "None"` + publicly accessible (e.g., website embed) |
-| **Detection** | Q4 (Unauthenticated Agents) identifies exposed agents; cross-reference with Q7 (knowledge sources with customer data) |
-| **Skill Signal** | `UserAuthenticationType == "None"` + knowledge sources containing sensitive data = reconnaissance target |
+| **Preconditions** | Agent is broadly accessible (`allowForAllUsers == "true"`, e.g., shared tenant-wide or website embed) |
+| **Detection** | Q4 (Broadly-Accessible Agents) identifies exposed agents; cross-reference with Q7 (knowledge sources with customer data) |
+| **Skill Signal** | `allowForAllUsers == "true"` + knowledge sources containing sensitive data = reconnaissance target |
+
+> **⚠️ Authentication-type telemetry gap:** The deprecated `AIAgentsInfo` table exposed `UserAuthenticationType` (`None`/`Integrated`/`Custom`), which let this skill directly flag *unauthenticated* agents. The new `AgentsInfo` table has **no populated authentication-type column** in current telemetry (`ToolsAuthenticationType` is empty). The closest available exposure signal is `RawAgentInfo.allowForAllUsers == "true"` (broadly accessible to all tenant users). This is a **proxy, not an equivalent** — it measures broad reach, not absence of authentication. Treat broadly-accessible agents as the highest-exposure cohort and recommend Entra-based access policies (Agent 365) to close the gap.
 
 ### Mitigation: Defender Runtime Protection
 
@@ -102,15 +106,15 @@ This is the primary runtime defense against all three scenarios above. When revi
 | Agent 365 Capability | What It Does | Skill Dimensions Addressed |
 |---------------------|-------------|---------------------------|
 | **1. Registry** | Single source of truth for all agents (Entra agent ID). IT can quarantine unsanctioned agents and detect shadow agents. Agent Store for governed discovery. | Agent Inventory (Q1), Creator Governance (Q10), Agent Sprawl (Q11) |
-| **2. Access Control** | Unique agent IDs via Entra. Agent Policy Templates enforce security from day one. Adaptive, risk-based access policies. Least-privilege enforcement. | Unauthenticated Agents (Q4), Access Control Policies (Q3) |
+| **2. Access Control** | Unique agent IDs via Entra. Agent Policy Templates enforce security from day one. Adaptive, risk-based access policies. Least-privilege enforcement. | Broadly-Accessible Agents (Q4), Access Posture (Q3) |
 | **3. Visualization** | Unified dashboard mapping agents ↔ users ↔ resources. Role-based reporting. Compliance logging, e-discovery, and audit trail. | MCP Tool Exposure (Q6), Knowledge Sources (Q7), Creator Governance (Q10) |
 | **4. Interoperability** | Agents access Work IQ (org data, relationships, context). Works across Copilot Studio, Microsoft Foundry, Agent Framework, Agent 365 SDK, and partner platforms. | Knowledge Source Risk (Q7), Tools Inventory (Q12) |
-| **5. Security** | Defense-in-depth via Microsoft Defender (posture + threat detection + runtime protection), Entra (real-time blocking), and Purview (data exposure risk, sensitive data leak prevention, compliance). | XPIA Email Risk (Q5), Credential Hygiene (Q8), HTTP Risk (Q9) |
+| **5. Security** | Defense-in-depth via Microsoft Defender (posture + threat detection + runtime protection), Entra (real-time blocking), and Purview (data exposure risk, sensitive data leak prevention, compliance). | XPIA Email Risk (Q5), Credential Hygiene (Q8), External Endpoint Risk (Q9) |
 
 **How to reference Agent 365 in reports:** When this skill identifies governance gaps (sprawl, missing authentication, uncontrolled tool access), recommend Agent 365 as the strategic platform to address them. Specific mappings:
 
 - **Agent sprawl / no naming conventions** → Agent 365 Registry + quarantine for unsanctioned agents
-- **Missing authentication** → Agent 365 Access Control + Entra agent IDs + Policy Templates
+- **Missing access controls / broadly-accessible agents** → Agent 365 Access Control + Entra agent IDs + Policy Templates
 - **No visibility into agent-resource connections** → Agent 365 Visualization dashboard
 - **Uncontrolled MCP/tool proliferation** → Agent 365 Security + Defender posture management
 - **XPIA / data exfiltration risk** → Agent 365 Security + Purview for real-time data leak prevention
@@ -120,7 +124,7 @@ This is the primary runtime defense against all three scenarios above. When revi
 ## 📑 TABLE OF CONTENTS
 
 1. **[Critical Workflow Rules](#-critical-workflow-rules---read-first-)** — Mandatory rules
-2. **[Table Schema Reference](#table-schema-reference)** — AIAgentsInfo columns and data types
+2. **[Table Schema Reference](#table-schema-reference)** — AgentsInfo columns and data types
 3. **[Agent Security Score Formula](#agent-security-score-formula)** — Composite risk scoring
 4. **[Execution Workflow](#execution-workflow)** — Phase-by-phase query plan
 5. **[Sample KQL Queries](#sample-kql-queries)** — All queries (Q1–Q12)
@@ -135,11 +139,11 @@ This is the primary runtime defense against all three scenarios above. When revi
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️
 
-1. **ALWAYS use `RunAdvancedHuntingQuery`** — The `AIAgentsInfo` table is an Advanced Hunting table. It is NOT available in Sentinel Data Lake (`query_lake`). All queries in this skill MUST use `RunAdvancedHuntingQuery`.
+1. **ALWAYS use `RunAdvancedHuntingQuery`** — The `AgentsInfo` table is an Advanced Hunting table. It is NOT available in Sentinel Data Lake (`query_lake`). All queries in this skill MUST use `RunAdvancedHuntingQuery`.
 
-2. **ALWAYS deduplicate agents with `arg_max`** — The table contains multiple records per agent (state snapshots over time). Every query that analyzes current agent state MUST use `| summarize arg_max(Timestamp, *) by AIAgentId` to get the latest record per agent.
+2. **ALWAYS deduplicate agents with `arg_max`** — The table contains multiple records per agent (state snapshots over time). Every query that analyzes current agent state MUST use `| summarize arg_max(Timestamp, *) by AgentId` to get the latest record per agent. Note `AgentId` is a **guid**.
 
-3. **ALWAYS exclude deleted agents** (unless specifically auditing deletions) — Add `| where AgentStatus != "Deleted"` after deduplication.
+3. **ALWAYS exclude deleted agents** (unless specifically auditing deletions) — Add `| where LifecycleStatus != "Deleted"` after deduplication. `LifecycleStatus` is blank for active agents and only set to `Deleted` for removed ones, so this filter keeps active agents.
 
 4. **ASK the user for output format** before generating the report:
    - **Inline chat summary** (quick review in chat)
@@ -148,7 +152,7 @@ This is the primary runtime defense against all three scenarios above. When revi
 
 5. **⛔ MANDATORY: Evidence-based analysis only** — Report ONLY what query results show. Use the explicit absence pattern (`✅ No [finding] detected`) when queries return 0 results. Never guess or assume.
 
-6. **🔴 PROHIBITED: Do NOT filter `AgentToolsDetails` or `AgentTopicsDetails` with direct dot-notation on string columns** — These are `dynamic` type columns. Use `mv-expand` then access properties. See [Known Pitfalls](#known-pitfalls).
+6. **🔴 The rich agent detail lives in `RawAgentInfo` (dynamic), not in flat columns** — Governance signals (`creatorId`, `allowForAllUsers`, `appType`, `scope`) and deep tool/connector detail (`declarativeCopilotMetadata`) are nested inside the `RawAgentInfo` dynamic column. The normalized columns (`DeclaredTools`, `McpServers`, `DeclaredDataSources`) are sparse and flat. Parse `RawAgentInfo` with `mv-expand`/dot-notation — never assume a flat column holds the value. See [Known Pitfalls](#known-pitfalls).
 
 7. **Run queries in parallel batches** where possible — Phase 1 queries (Q1–Q3) are independent and can run in parallel. Phase 2 queries (Q4–Q9) are independent and can run in parallel. Phase 3 (Q10–Q12) can run in parallel.
 
@@ -158,38 +162,69 @@ This is the primary runtime defense against all three scenarios above. When revi
 
 ## Table Schema Reference
 
-The `AIAgentsInfo` table (Preview) contains configuration snapshots of AI agents from Copilot Studio.
+The `AgentsInfo` table (Preview) contains configuration snapshots of AI agents across Copilot Studio, Microsoft 365 Copilot (Agent Builder), Microsoft Foundry, and third-party platforms. The schema below reflects the **live table** (which differs from the published docs in several places — column casing, types, and which columns are actually populated).
+
+### Top-level columns
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `Timestamp` | datetime | Last recorded date/time for this agent snapshot |
-| `AIAgentId` | guid | Unique agent identifier |
-| `AIAgentName` | string | Display name of the agent |
-| `AgentCreationTime` | datetime | When the agent was created |
-| `CreatorAccountUpn` | string | UPN of the creator |
-| `OwnerAccountUpns` | string | UPNs of all owners |
-| `LastModifiedByUpn` | string | UPN of last modifier |
-| `LastModifiedTime` | datetime | When last modified |
-| `LastPublishedTime` | datetime | When last published |
-| `LastPublishedByUpn` | string | UPN of last publisher |
-| `AgentDescription` | string | Agent description |
-| `AgentStatus` | string | `Created`, `Published`, `Deleted` |
-| `UserAuthenticationType` | string | `None`, `Integrated`, `Custom` |
-| `AgentUsers` | string | UPNs/group IDs that can use the agent |
-| `KnowledgeDetails` | string | Knowledge sources (JSON array as string) |
-| `AgentActionTriggers` | string | Triggers for autonomous actions |
-| `RawAgentInfo` | string | Raw JSON config blob |
-| `AuthenticationTrigger` | string | `As Needed`, `Always` |
-| `AccessControlPolicy` | string | `Any`, `Agent readers`, `Group membership`, `Any (multitenant)` |
-| `AuthorizedSecurityGroupIds` | dynamic | Allowed AAD group IDs |
-| `AgentTopicsDetails` | dynamic | Topic specifications |
-| `AgentToolsDetails` | dynamic | Tool specifications |
-| `EnvironmentId` | string | Power Platform environment ID |
-| `Platform` | string | `Copilot Studio` |
-| `IsGenerativeOrchestrationEnabled` | bool | Uses dynamic AI orchestration |
-| `AgentAppId` | string | Entra app registration ID |
-| `ConnectedAgentsSchemaNames` | dynamic | Linked agent schemas |
-| `ChildAgentsSchemaNames` | dynamic | Child agent schemas |
+| `AgentId` | guid | Unique agent identifier (dedup key) |
+| `Name` | string | Display name of the agent |
+| `Description` | string | Agent description |
+| `Platform` | string | `Copilot Studio`, `Agent Builder in Microsoft 365 Copilot`, `Microsoft Foundry`, `Other`, `SharePoint`, `Amazon Bedrock`, `LocalAgents` |
+| `Version` | string | Agent version |
+| `PublishedStatus` | string | `Published`, `Draft` |
+| `LifecycleStatus` | string | Blank for active agents; `Deleted` for removed agents |
+| `CreatedDateTime` | datetime | When the agent was created |
+| `LastUpdatedDateTime` | datetime | When last updated |
+| `LastPublishedDateTime` | datetime | When last published |
+| `Owners` | dynamic | Owner identities (sparse) |
+| `SharedWith` | dynamic | Sharing targets (sparse) |
+| `InstanceCount` | int | Blueprint instance count |
+| `Instructions` | string | System prompt / agent instructions (well populated) |
+| `Model` | string | Backing LLM model (sparse) |
+| `Capabilities` | dynamic | Declared capabilities (sparse) |
+| `DeclaredDataSources` | dynamic | Knowledge/data sources — array of filename/source strings (sparse) |
+| `DeclaredTools` | dynamic | Declared tools — array of `{type, name}` (sparse, flat) |
+| `McpServers` | dynamic | MCP servers — array of `{name, description}` (sparse) |
+| `Skills`, `ConnectedAgents`, `Memory`, `Guardrails` | dynamic | Additional declared config (sparse) |
+| `EntraAgentID` / `EntraBlueprintID` / `ObservabilityID` | string | Entra + observability linkage (note capital `ID`) |
+| `RawAgentInfo` | dynamic | **Primary detail source** — full governance + connector manifest (populated for ~all agents). See nested keys below |
+| `TenantId`, `Type`, `SourceSystem` | string | Standard envelope columns |
+
+### ⚠️ Columns that are EMPTY / unreliable in current telemetry
+
+These columns exist but are **not populated** in observed data — do NOT build detections on them without first confirming population:
+
+`ToolsAuthenticationType` (auth-type gap — see below), `Availability`, `Endpoints`, `Triggers`, `Permissions`, `Model` (mostly), and most of `Owners`/`SharedWith`.
+
+> **🔴 Authentication-type gap:** The deprecated `AIAgentsInfo.UserAuthenticationType` (`None`/`Integrated`/`Custom`) has **no populated equivalent** in `AgentsInfo`. There is no reliable way to flag "unauthenticated" agents from this table. Use `RawAgentInfo.allowForAllUsers == "true"` as a broad-exposure proxy (Q4) and document the gap.
+
+### `RawAgentInfo` nested keys (the rich data)
+
+For Copilot Studio agents, `RawAgentInfo` is a marketplace/governance manifest. Key fields the queries below rely on:
+
+| Path | Meaning |
+|------|---------|
+| `RawAgentInfo.creatorId` | Creator **GUID** (resolve to UPN via `IdentityInfo` join). Replaces `CreatorAccountUpn`. Sparse |
+| `RawAgentInfo.allowForAllUsers` | `"true"` = broadly accessible to all tenant users (exposure signal). Replaces `AccessControlPolicy == "Any"` |
+| `RawAgentInfo.appType` | `lob` (line-of-business, owner-scoped), `shared`, `thirdParty`, `firstParty` |
+| `RawAgentInfo.scope` | Sharing scope (e.g., `tenant`) |
+| `RawAgentInfo.declarativeCopilotMetadata` | **Deep connector/tool detail** (DCM). Present only for the connector-sourced subset (~10% of Copilot Studio agents) |
+
+**DCM nesting** (recovers deep tool, operation, and endpoint detail):
+
+```
+RawAgentInfo.declarativeCopilotMetadata[]
+  .actions[]
+    .apis[]            // .type = OpenApi | RemoteMCPServer | api_action
+      .serverUrls[]    // populated for OpenApi + RemoteMCPServer (external hosts)
+      .operations[]
+        .operationId   // e.g., "Office 365 Outlook Send an email (V2)"
+```
+
+DCM siblings also carry `instructions`, `llmModels` (model), and `sourceIds` (incl. `EnvironmentId`, `SourceAgentId`).
 
 ---
 
@@ -207,11 +242,11 @@ Each dimension contributes 0–20 points to a maximum of 100:
 
 | Dimension | Max | 🟢 Low (0–5) | 🟡 Medium (6–12) | 🔴 High (13–20) |
 |-----------|-----|--------------|-------------------|------------------|
-| **Unauthenticated Agents** | 20 | 0 no-auth agents | 1 no-auth agent | ≥2 no-auth agents, especially if Published |
-| **XPIA Email Risk** | 20 | 0 agents with GenAI + email | 1 agent with GenAI + email (inputs hardcoded) | ≥1 agent with GenAI + email (inputs AI-controlled) |
-| **MCP Tool Exposure** | 20 | 0–2 MCP agents, known creators | 3–10 MCP agents | >10 MCP agents or agents with `invokemcpgraph` + broad access |
-| **Knowledge Source Risk** | 20 | 0 agents with SharePoint/internal sources + broad access | 1–3 agents with internal sources + scoped access | Agents with internal data sources + `AccessControlPolicy == "Any"`. **Compounding rule:** When agents have SharePoint sources + GenAI + SendEmailV2 + "Any" access (the full XPIA chain from Q5 + Q7), score at maximum (20) for this dimension AND score XPIA Email Risk at maximum (20) — the combination is the documented attack pattern |
-| **Credential Hygiene** | 20 | 0 credential patterns detected | Patterns found but agent is unpublished (Created) | Patterns found in Published agents |
+| **Broadly-Accessible Agents** | 20 | 0 agents with `allowForAllUsers == "true"` | 1–2 broadly-accessible agents | ≥3 broadly-accessible agents, especially if Published with knowledge sources or email capability |
+| **XPIA Email Risk** | 20 | 0 email-capable agents | 1–2 email-capable agents (scoped access) | ≥1 email-capable agent that is also broadly accessible or has knowledge sources |
+| **Tool & Endpoint Exposure** | 20 | 0–2 MCP agents, known creators, no external endpoints | 3–10 MCP agents, external endpoints all HTTPS/standard-port | >10 MCP agents, OR MCP/endpoint agents that are broadly accessible, OR any insecure-scheme / non-standard-port external endpoint (Q9 escalators) |
+| **Knowledge Source Risk** | 20 | 0 agents with data sources + broad access | 1–3 agents with data sources + scoped access | Agents with data sources + `allowForAllUsers == "true"`. **Compounding rule:** When agents have data sources + an email-send operation + broad access (the full XPIA chain from Q5 + Q7), score at maximum (20) for this dimension AND score XPIA Email Risk at maximum (20) — the combination is the documented attack pattern |
+| **Credential Hygiene** | 20 | 0 credential patterns detected | Patterns found but agent is Draft (unpublished) | Patterns found in Published agents |
 
 ### Interpretation Scale
 
@@ -222,13 +257,24 @@ Each dimension contributes 0–20 points to a maximum of 100:
 | **46–70** | 🟠 Concerning | Investigate — multiple risk signals present |
 | **71–100** | 🔴 Critical | Immediate remediation — significant agent security risk |
 
+> The **Tool & Endpoint Exposure** dimension folds external-endpoint risk (Q9) into the MCP exposure signal: an insecure scheme, a non-standard port, or an external endpoint on a broadly-accessible agent each escalates this dimension to its High tier regardless of MCP count.
+
+### Supplementary Indicators (not summed into the /100 score)
+
+Two indicators are reported **alongside** the composite score for added context. They are intentionally **not** added to the /100 total — they enrich interpretation and feed the dimensions above as evidence.
+
+| Indicator | Source | What it tells you |
+|-----------|--------|-------------------|
+| **Capability Privilege Index** | Q13 | Count of agents holding ≥1 *sensitive* operation (mail-send, directory-write, data-write, messaging). Split by broad access. A high count of broadly-accessible + sensitive-op agents is the strongest privilege-abuse signal and should justify maxing the Broad Access and/or XPIA dimensions. |
+| **Deep-Manifest Coverage** | Q14 | Percentage of the fleet carrying `declarativeCopilotMetadata` (DCM). Because the XPIA, endpoint, and capability queries depend on DCM, this is the fraction of the estate that was *fully* inspectable. Every report MUST surface this so the analyst knows what was **not** inspected. |
+
 ---
 
 ## Execution Workflow
 
 ### Phase 0: Prerequisites
 
-1. Confirm `RunAdvancedHuntingQuery` is available (AIAgentsInfo is AH-only)
+1. Confirm `RunAdvancedHuntingQuery` is available (AgentsInfo is AH-only)
 2. Ask user for output format (inline / markdown / both)
 
 ### Phase 1: Inventory & Overview (Q1–Q3)
@@ -237,9 +283,9 @@ Each dimension contributes 0–20 points to a maximum of 100:
 
 | Query | Purpose |
 |-------|---------|
-| Q1 | Global inventory summary (counts, date range, environments) |
-| Q2 | Status and authentication type breakdown |
-| Q3 | Access control policy distribution |
+| Q1 | Global inventory summary (counts, date range, platforms, creators) |
+| Q2 | Status and platform breakdown |
+| Q3 | Access posture distribution (`appType` / `allowForAllUsers`) |
 
 ### Phase 2: Security Risk Analysis (Q4–Q9)
 
@@ -247,12 +293,12 @@ Each dimension contributes 0–20 points to a maximum of 100:
 
 | Query | Purpose |
 |-------|---------|
-| Q4 | Unauthenticated agents (no-auth detail) |
-| Q5 | XPIA email exfiltration risk (GenAI + SendEmailV2) |
+| Q4 | Broadly-accessible agents (`allowForAllUsers == "true"` detail) |
+| Q5 | XPIA email exfiltration risk (email-send connector operations) |
 | Q6 | MCP tool inventory across agents |
-| Q7 | Knowledge source audit |
+| Q7 | Knowledge / data source audit |
 | Q8 | Hard-coded credential scan |
-| Q9 | HTTP request risk (non-standard ports / sensitive endpoints) |
+| Q9 | External endpoint & HTTP risk (connector `serverUrls`) |
 
 ### Phase 3: Governance & Trends (Q10–Q12)
 
@@ -262,7 +308,9 @@ Each dimension contributes 0–20 points to a maximum of 100:
 |-------|---------|
 | Q10 | Top creators and naming hygiene |
 | Q11 | Agent creation trend over time |
-| Q12 | Tools inventory (all tool types, not just MCP) |
+| Q12 | Capability / tools inventory (all operation types) |
+| Q13 | Operation-level privilege mapping (sensitive-operation matrix → Capability Privilege Index) |
+| Q14 | Deep-manifest coverage (% of fleet with DCM → report coverage banner) |
 
 ### Phase 4: Score Computation & Report Generation
 
@@ -273,299 +321,399 @@ Each dimension contributes 0–20 points to a maximum of 100:
 
 ### Phase 5: Runtime Correlation (Optional)
 
-`AIAgentsInfo` describes how agents are **configured**; it does not show whether they are actually **used** or what they do at runtime. To close that gap, correlate the configuration inventory against the `CopilotActivity` table (all-surface AI activity log).
+`AgentsInfo` describes how agents are **configured**; it does not show whether they are actually **used** or what they do at runtime. To close that gap, correlate the *flagged* configuration set against the `CopilotActivity` table (all-surface AI activity log, available in Advanced Hunting).
 
-**When to run:** After Phase 4, when the user wants to know which audited agents are actually active, which are dormant, or whether a flagged agent shows risky runtime behavior (jailbreaks, broad data access, autonomous tool sprawl).
+**When to run:** After Phase 4, when the user wants to know which *flagged* agents are actually active, which are dormant, or whether a high-risk agent shows runtime behavior.
 
-**How:** Join on the agent identifier — `AIAgentsInfo.AIAgentId` ↔ `CopilotActivity.AgentId`. Use the dedicated query library **`queries/cloud/copilot_activity_investigation.md`** rather than duplicating queries here:
+**🔴 Use a SCOPED lookup, never a fleet-wide join.** A `leftouter`/`inner` join of the full `AgentsInfo` fleet (~15k agents, heavy `RawAgentInfo` dynamic) against `CopilotActivity` (100k+ rows) **times out** the Advanced Hunting endpoint. Instead:
 
-| Goal | Query in `copilot_activity_investigation.md` |
-|------|-----------------------------------------------|
-| Which configured agents are actually active (vs dormant) | Q7 — Declarative Agent Adoption |
-| What data a flagged agent's interactions accessed | Q4 — Data Accessed by Copilot |
-| What runtime tools/connectors an autonomous agent invoked | Q5 — Autonomous Agent Runtime Tool Invocations |
-| Whether Defender Runtime Protection evaluated the agent's tools | Q6 — Defender Runtime Protection Tool Evaluations |
-| Whether the agent was targeted by jailbreak / prompt injection | Q8 — Jailbreak / Prompt Injection Detection |
+1. **Phase 4 produces a small flagged-agent NAME list** (broadly-accessible from Q4 + sensitive-op agents from Q13 — typically <50 names).
+2. **Filter `CopilotActivity` to that name set** with `where AgentName in (FlaggedNames)` — light, no join. See Query 15.
+
+**Join-key pitfall:** `CopilotActivity.AgentId` is a **composite/prefixed string** (e.g., `T_<tenant>.<guid>`, `CopilotStudio.Declarative.T_….gpt.<guid>`, or literals like `AgentBuilder`) — it does **not** equal the clean `AgentsInfo.AgentId` GUID, so ID-based joins return 0 matches. **`AgentName` is the reliable correlation key.** Also note most `CopilotActivity` rows have an **empty** `AgentId`/`AgentName` (general M365 Copilot usage, not declarative-agent-attributed), so runtime attribution is inherently low-coverage — absence from `CopilotActivity` does NOT prove an agent is dormant.
 
 **Two high-value correlations:**
-- **Configured-but-dormant** — agent present in `AIAgentsInfo` but absent from `CopilotActivity` Q7 results → candidate for decommissioning (reduces sprawl/attack surface).
-- **Active-and-dangerous** — agent that scored poorly in Phase 1–3 (unauthenticated, XPIA-exposed, many MCP tools) AND appears with high activity in Q7 → prioritize for remediation.
+- **Active-and-dangerous** — a flagged agent (broadly accessible / XPIA-exposed / sensitive ops) that ALSO appears in `CopilotActivity` with real interactions → **highest remediation priority** (Query 15).
+- **Configured-but-dormant** — a flagged agent absent from `CopilotActivity` over the window → lower urgency, candidate for decommissioning (caveat: attribution gaps above).
 
-> Keep this phase thin: the posture skill owns *configuration* assessment; `copilot_activity_investigation.md` owns *runtime* reconstruction. Reference, don't duplicate.
+For deeper runtime reconstruction (data accessed, tools invoked, jailbreak detections), hand off to the dedicated query library **`queries/cloud/copilot_activity_investigation.md`** rather than duplicating queries here.
+
+> Keep this phase thin and scoped: the posture skill owns *configuration* assessment; `copilot_activity_investigation.md` owns *runtime* reconstruction. Reference, don't duplicate.
 
 ---
 
 ## Sample KQL Queries
 
-> **All queries below are verified against the AIAgentsInfo table schema. Use them exactly as written, substituting only where noted.**
+> **All queries below are validated against the live `AgentsInfo` table. Use them exactly as written, substituting only where noted.** Because the rich agent detail lives in the `RawAgentInfo` dynamic column, several queries parse `RawAgentInfo.declarativeCopilotMetadata` (DCM). DCM is present only for the connector-sourced subset of agents — queries that depend on it carry a **coverage caveat**.
 
 ### Query 1: Global Inventory Summary
 
 ```kql
-AIAgentsInfo
-| summarize 
-    TotalRecords = count(),
-    UniqueAgents = dcount(AIAgentId),
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| extend CreatorId = tostring(RawAgentInfo.creatorId)
+| summarize
+    UniqueAgents = dcount(AgentId),
     EarliestRecord = min(Timestamp),
     LatestRecord = max(Timestamp),
-    UniqueCreators = dcount(CreatorAccountUpn),
+    Published = countif(PublishedStatus == "Published"),
+    Draft = countif(PublishedStatus == "Draft"),
+    Deleted = countif(LifecycleStatus == "Deleted"),
     UniquePlatforms = dcount(Platform),
-    UniqueEnvironments = dcount(EnvironmentId)
+    UniqueCreators = dcount(CreatorId)
 ```
 
-### Query 2: Status & Authentication Breakdown
+> **Note:** `UniqueCreators` counts only agents with a populated `RawAgentInfo.creatorId` (the connector-sourced subset). It under-counts true creators; treat it as a lower bound.
+
+### Query 2: Status & Platform Breakdown
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| summarize AgentCount = count() by AgentStatus, UserAuthenticationType
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| summarize AgentCount = count() by Platform, PublishedStatus
 | order by AgentCount desc
 ```
 
-### Query 3: Access Control Policy Distribution
+> **⚠️ Authentication-type gap:** The deprecated `AIAgentsInfo` table broke this down by `UserAuthenticationType`. `AgentsInfo` has no populated authentication-type column, so this query reports status by **platform** instead. For exposure, use Q3 (access posture) and Q4 (broadly-accessible agents).
+
+### Query 3: Access Posture Distribution
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| summarize Count = count() by AccessControlPolicy
-| order by Count desc
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| extend AppType = tostring(RawAgentInfo.appType),
+         AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers)
+| summarize AgentCount = count() by Platform, AppType, AllowAllUsers
+| order by AgentCount desc
 ```
 
-### Query 4: Unauthenticated Agents (No-Auth Detail)
+**Interpretation:** `appType == "lob"` (line-of-business) agents are owner-scoped; `appType == "shared"` are shared more widely. `allowForAllUsers == "true"` (any platform) is the broad-exposure signal — these reach every tenant user. This replaces the old `AccessControlPolicy` distribution.
 
-🔴 **Security-critical query** — agents with `UserAuthenticationType == "None"` have no user authentication and may be publicly accessible.
+### Query 4: Broadly-Accessible Agents
+
+🔴 **Security-critical query** — agents with `allowForAllUsers == "true"` are accessible to all tenant users. This is the closest available proxy for the old "unauthenticated / Any access" exposure signal (see the [authentication-type gap](#-columns-that-are-empty--unreliable-in-current-telemetry)).
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| where UserAuthenticationType == "None"
-| project 
-    AIAgentName, 
-    AgentStatus,
-    CreatorAccountUpn, 
-    OwnerAccountUpns,
-    AccessControlPolicy,
-    IsGenerativeOrchestrationEnabled,
-    AgentCreationTime,
-    LastModifiedTime,
-    AgentDescription,
-    EnvironmentId
-| order by AgentStatus desc, AgentCreationTime desc
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| extend AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers),
+         AppType = tostring(RawAgentInfo.appType),
+         CreatorId = tostring(RawAgentInfo.creatorId)
+| where AllowAllUsers == "true"
+| project Name, Platform, PublishedStatus, AppType, CreatorId, AgentId, CreatedDateTime, Description
+| order by PublishedStatus asc, CreatedDateTime desc
 ```
 
-**Post-processing:** For each unauthenticated agent, note:
-- Is it Published (active) or just Created (draft)?
-- Does it have generative orchestration enabled (higher risk)?
-- What is its access control policy (Any = highest risk)?
-- Cross-reference with Q5 (email tools) and Q6 (MCP tools) for compounding risk.
+**Post-processing:** For each broadly-accessible agent, note:
+- Is it Published (active) or Draft?
+- Cross-reference with Q5 (email-capable) and Q7 (knowledge sources) for compounding XPIA / reconnaissance risk.
 
-**🔴 Capability Reconnaissance Risk ([Attack Scenario 3](#attack-scenario-3-capability-reconnaissance-on-unauthenticated-agent)):** Unauthenticated agents are prime targets for adversarial probing. Attackers can interact with the agent using crafted prompts to enumerate available tools and knowledge sources, then exploit discovered capabilities to extract sensitive data. Published agents with `AccessControlPolicy == "Any"` + knowledge sources containing customer/internal data are the highest-priority findings.
+**🔴 Capability Reconnaissance Risk ([Attack Scenario 3](#attack-scenario-3-capability-reconnaissance-on-unauthenticated-agent)):** Broadly-accessible agents are prime targets for adversarial probing. Published agents with knowledge sources containing customer/internal data are the highest-priority findings.
 
-### Query 5: XPIA Email Exfiltration Risk (GenAI + SendEmailV2)
+### Query 5: XPIA Email Exfiltration Risk (Email-Capable Agents)
 
-🔴 **Security-critical query** — agents combining generative orchestration with email-sending tools. A successful Cross-Plugin Injection Attack (XPIA) could use the AI orchestrator to exfiltrate data to arbitrary email recipients.
+🔴 **Security-critical query** — agents that can send email via a connector operation. A successful prompt-injection (XPIA) attack could direct the agent to exfiltrate data to arbitrary recipients.
+
+> **Coverage caveat:** Detects email-send operations declared in `RawAgentInfo.declarativeCopilotMetadata` (DCM). DCM is present only for the connector-sourced agent subset. The old `IsGenerativeOrchestrationEnabled` flag and action-level `inputs` (AI-controlled vs hardcoded recipient) are **not available** in `AgentsInfo` — this query identifies *capability*, not orchestration mode.
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| where IsGenerativeOrchestrationEnabled == true
-| mv-expand Action = AgentToolsDetails
-| extend OperationId = tostring(Action.action.operationId)
-| where OperationId == "SendEmailV2"
-| extend InputsPopulated = isnotempty(Action.inputs)
-| project 
-    AIAgentName,
-    AIAgentId,
-    CreatorAccountUpn,
-    OperationId,
-    InputsPopulated,
-    AccessControlPolicy,
-    UserAuthenticationType,
-    AgentStatus
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))
+| mv-expand DCM = RawAgentInfo.declarativeCopilotMetadata
+| mv-expand Action = DCM.actions
+| mv-expand Api = Action.apis
+| mv-expand Op = Api.operations
+| extend OperationId = tostring(Op.operationId)
+| where OperationId has "Send an email" or OperationId has "SendEmail"
+| extend AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers),
+         CreatorId = tostring(RawAgentInfo.creatorId)
+| summarize EmailOperations = make_set(OperationId)
+    by AgentId, Name, Platform, PublishedStatus, AllowAllUsers, CreatorId
+| order by AllowAllUsers desc, PublishedStatus asc
 ```
 
 **Post-processing:**
-- `InputsPopulated == false` → All email inputs (recipient, subject, body) are AI-controlled = **highest XPIA risk**
-- `InputsPopulated == true` → Some inputs hardcoded (e.g., fixed recipient) = **reduced but not eliminated risk**. Note: `InputsPopulated` only checks the action-level `inputs` field in `AgentToolsDetails` — it does NOT detect topic-level validation (which is invisible to this query and unreliable for GenAI agents anyway; see [Pitfall #9](#9-genai-orchestrator-bypasses-topics-for-tool-invocation)).
-- Cross-reference with Q4: if agent also has `UserAuthenticationType == "None"`, flag as **double risk**.
-- **Cross-reference with Q7:** if agent also has `SharePointSearchSource` knowledge sources, flag as the **documented XPIA exfiltration pattern** ([Attack Scenario 2](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia)). The triple combination of GenAI orchestration + SendEmailV2 + SharePoint knowledge source is the textbook attack chain — prioritize these agents for Defender Runtime Protection.
+- `AllowAllUsers == "true"` → email-capable **and** broadly accessible = **highest XPIA risk** (any tenant user can trigger the chain).
+- **Cross-reference with Q7:** an email-capable agent that also has knowledge/data sources is the **documented XPIA exfiltration pattern** ([Attack Scenario 2](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia)). Prioritize these for Defender Runtime Protection.
 
-**🔴 Attack Scenario Mapping:** This query detects the agent configuration preconditions for two documented attack scenarios:
-
-1. **[Malicious Instruction Injection via Event Trigger](#attack-scenario-1-malicious-instruction-injection-via-event-triggered-workflow):** An agent monitoring a mailbox (event trigger) with GenAI + SendEmailV2 can be tricked by a crafted inbound email into searching its knowledge base for sensitive data and exfiltrating it via email. The attack operates entirely within the agent's allowed permissions. If `InputsPopulated == false` (AI-controlled recipients), the agent can be directed to send to any attacker-controlled address.
-
-2. **[Prompt Injection via Shared Document](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia):** An agent with SharePoint knowledge sources + email tools can be exploited by a malicious insider who embeds crafted instructions in a document. The agent reads a sensitive file it has connector-level access to (but the attacker doesn't) and exfiltrates the contents via email. Cross-reference with Q7 to identify agents that have both SharePoint sources and email capability.
-
-**Triple-risk agents** (no auth + GenAI + email) are the most dangerous: any external user can trigger the XPIA chain without authentication.
+**🔴 Attack Scenario Mapping:** This query detects the agent-configuration precondition (email-send capability) for two documented scenarios — [Malicious Instruction Injection via Event Trigger](#attack-scenario-1-malicious-instruction-injection-via-event-triggered-workflow) and [Prompt Injection via Shared Document](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia). Broadly-accessible email-capable agents (no access restriction + email) are the most dangerous.
 
 ### Query 6: MCP Tool Inventory Across Agents
 
-🟠 **Governance query** — MCP tools give agents access to external servers, Graph API, Sentinel data, and more. Uncontrolled MCP proliferation increases the attack surface.
+🟠 **Governance query** — MCP servers give agents access to external systems, Graph API, Sentinel data, and more. Uncontrolled MCP proliferation increases the attack surface. `AgentsInfo` exposes a dedicated `McpServers` column (cleaner than the old tool-detail parse).
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| mv-expand Action = AgentToolsDetails
-| where Action.action.operationDetails["$kind"] == "ModelContextProtocolMetadata"
-| extend MCPName = tostring(Action.action.operationDetails["operationId"])
-| extend MCPDisplayName = tostring(Action.modelDisplayName)
-| summarize 
-    MCPTools = make_set(MCPName),
-    MCPToolCount = dcount(MCPName)
-    by AIAgentName, AIAgentId, CreatorAccountUpn, AccessControlPolicy, UserAuthenticationType
-| order by MCPToolCount desc
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where array_length(McpServers) > 0
+| mv-expand Mcp = McpServers
+| extend McpName = tostring(Mcp.name)
+| extend CreatorId = tostring(RawAgentInfo.creatorId),
+         AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers)
+| summarize McpServerList = make_set(McpName), McpToolCount = dcount(McpName)
+    by AgentId, Name, Platform, CreatorId, AllowAllUsers
+| order by McpToolCount desc
 ```
 
-### Query 7: Knowledge Source Audit
-
-🟡 **Data exposure query** — identifies what data sources agents can access, including SharePoint sites, public websites, and federated data connectors.
+**MCP server distribution** (which servers appear on the most agents):
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| where isnotempty(KnowledgeDetails)
-| mv-expand KnowledgeRaw = parse_json(KnowledgeDetails)
-| extend KnowledgeJson = parse_json(tostring(KnowledgeRaw))
-| extend SourceKind = tostring(KnowledgeJson.source["$kind"])
-| extend SourceSite = tostring(KnowledgeJson.source.site.literalValue)
-| project 
-    AIAgentName,
-    AIAgentId,
-    CreatorAccountUpn,
-    AccessControlPolicy,
-    UserAuthenticationType,
-    SourceKind,
-    SourceSite
-| order by SourceKind asc, AIAgentName asc
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where array_length(McpServers) > 0
+| mv-expand Mcp = McpServers
+| summarize AgentCount = dcount(AgentId) by McpServer = tostring(Mcp.name)
+| order by AgentCount desc
+```
+
+> **Note:** `McpServers` is flat (`{name, description}` only) — no server URLs or credential config. For external MCP **endpoint** detail (host/scheme/port), use Q9, which parses `RemoteMCPServer` `serverUrls` from DCM.
+
+### Query 7: Knowledge / Data Source Audit
+
+🟡 **Data exposure query** — identifies what data sources agents declare. In `AgentsInfo`, declared sources appear in the `DeclaredDataSources` column as an array of source/filename strings.
+
+```kql
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where array_length(DeclaredDataSources) > 0
+| mv-expand DS = DeclaredDataSources
+| extend DataSource = tostring(DS)
+| extend AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers),
+         CreatorId = tostring(RawAgentInfo.creatorId)
+| summarize DataSources = make_set(DataSource), SourceCount = dcount(DataSource)
+    by AgentId, Name, Platform, AllowAllUsers, CreatorId
+| order by SourceCount desc
 ```
 
 **Post-processing — flag high-risk combinations:**
-- `SharePointSearchSource` + `AccessControlPolicy == "Any"` → internal data exposed broadly
-- `PublicSiteSearchSource` to sensitive domains (government, financial)
-- `FederatedStructuredSearchSource` → check if connected to internal databases/APIs
-- Any knowledge source on an agent with `UserAuthenticationType == "None"`
+- Data sources + `allowForAllUsers == "true"` → internal data potentially exposed broadly.
+- Any data source on an agent that is also email-capable (Q5) → XPIA exfiltration chain.
 
-**🔴 Document Injection Risk ([Attack Scenario 2](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia)):** SharePoint knowledge sources are the primary vector for indirect prompt injection (XPIA). A malicious insider with write access to any SharePoint site connected to an agent can embed crafted instructions in a document. When the agent processes the document, it follows the injected instructions — potentially reading files from other SharePoint sites the agent has connector-level access to (but the attacker doesn't). **Cross-reference with Q5:** agents that combine SharePoint knowledge sources with email-sending tools are the textbook XPIA exfiltration pattern. Flag these as **highest priority** in the Knowledge Source Risk dimension.
+> **Coverage caveat:** `DeclaredDataSources` is sparse and stores source **names/filenames** (e.g., `Priority-Banking-Policy.docx`), not the richer `$kind`/site structure the old `KnowledgeDetails` column held. Source *type* classification (SharePoint vs public site vs federated) is not reliably available — report the declared source names and flag broadly-accessible agents that carry any.
 
-**Reconnaissance amplifier ([Attack Scenario 3](#attack-scenario-3-capability-reconnaissance-on-unauthenticated-agent)):** Agents with `UserAuthenticationType == "None"` + knowledge sources containing sensitive data (customer info, internal contacts, financial records) are prime targets for capability reconnaissance. Attackers can enumerate the knowledge sources via probing prompts, then extract all accessible data.
+**🔴 Document Injection Risk ([Attack Scenario 2](#attack-scenario-2-prompt-injection-via-shared-document--email-exfiltration-xpia)):** Data sources are the primary vector for indirect prompt injection (XPIA). **Cross-reference with Q5:** agents that combine declared data sources with an email-send operation are the textbook XPIA exfiltration pattern — flag these as **highest priority** in the Knowledge Source Risk dimension.
 
 ### Query 8: Hard-Coded Credential Scan
 
-🔴 **Security-critical query** — scans agent Topics and Actions for patterns matching API keys, JWTs, Basic auth headers, and other credential formats.
+🔴 **Security-critical query** — scans agent `Instructions` and the connector metadata in `RawAgentInfo` for patterns matching API keys, JWTs, Basic auth headers, and embedded credentials.
 
 ```kql
-let suspicious_patterns = @"(AKIA[0-9A-Z]{16})|(AIza[0-9A-Za-z_\-]{35})|(xox[baprs]-[0-9a-zA-Z]{10,48})|(ghp_[A-Za-z0-9]{36,59})|(sk_(live|test)_[A-Za-z0-9]{24})|(SG\.[A-Za-z0-9]{22}\.[A-Za-z0-9]{43})|(\d{8}:[\w\-]{35})|(eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)|(Authorization\s*:\s*Basic\s+[A-Za-z0-9=:+]+)|([A-Za-z]+:\/\/[^\/\s]+:[^\/\s]+@[^\/\s]+)";
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| mv-expand tool = AgentToolsDetails
-| mv-expand topic = AgentTopicsDetails
-| where isnotempty(tool) and isnotempty(topic)
-| where tool matches regex suspicious_patterns or topic matches regex suspicious_patterns
-| project 
-    AIAgentName,
-    AIAgentId,
-    AgentStatus,
-    CreatorAccountUpn,
-    OwnerAccountUpns
+let suspicious_patterns = @"(AKIA[0-9A-Z]{16})|(AIza[0-9A-Za-z_\-]{35})|(xox[baprs]-[0-9a-zA-Z]{10,48})|(ghp_[A-Za-z0-9]{36,59})|(sk_(live|test)_[A-Za-z0-9]{24})|(SG\.[A-Za-z0-9]{22}\.[A-Za-z0-9]{43})|(eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)|(Authorization\s*:\s*Basic\s+[A-Za-z0-9=:+]+)|([A-Za-z]+:\/\/[^\/\s]+:[^\/\s]+@[^\/\s]+)";
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| extend Haystack = strcat(tostring(Instructions), " ", tostring(RawAgentInfo.declarativeCopilotMetadata))
+| where Haystack matches regex suspicious_patterns
+| project Name, Platform, PublishedStatus,
+          CreatorId = tostring(RawAgentInfo.creatorId), AgentId
 ```
 
 **Post-processing:**
-- Published agents with credential matches = **immediate remediation required**
-- Recommend Azure Key Vault + environment variables instead of hard-coded secrets
+- Published agents with credential matches = **immediate remediation required**.
+- Recommend Azure Key Vault + environment variables instead of hard-coded secrets.
+- The JWT (`eyJ...`) and `url://user:pass@host` patterns can false-positive on example payloads — manually review each match.
 
-### Query 9: HTTP Request Risk (Non-Standard Ports & Sensitive Endpoints)
+### Query 9: External Endpoint & HTTP Risk
 
-🟠 **Network risk query** — identifies agents making HTTP requests to non-standard ports or to sensitive API endpoints that should use built-in connectors.
-
-```kql
-// Part A: Non-standard ports
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| mv-expand Topic = AgentTopicsDetails
-| where Topic has "HttpRequestAction"
-| extend TopicActions = Topic.beginDialog.actions
-| mv-expand action = TopicActions
-| where action['$kind'] == "HttpRequestAction"
-| extend Url = tostring(action.url.literalValue)
-| extend ParsedUrl = parse_url(Url)
-| extend Host = tostring(ParsedUrl["Host"]), Port = tostring(ParsedUrl["Port"])
-| where isnotempty(Port) and Port != "443" and Port != "80"
-| project AIAgentName, CreatorAccountUpn, Host, Port, Url, AgentStatus, AccessControlPolicy
-```
+🟠 **Network risk query** — inventories the external hosts that agent connectors reach, and flags insecure schemes or non-standard ports. External endpoints are declared in DCM `apis[].serverUrls` for `OpenApi` and `RemoteMCPServer` connector types (these are populated; `api_action` Power Platform connectors abstract the URL and are not covered).
 
 ```kql
-// Part B: Sensitive endpoint detection (Graph, ARM)
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| mv-expand Topic = AgentTopicsDetails
-| where Topic has "HttpRequestAction"
-| extend TopicActions = Topic.beginDialog.actions
-| mv-expand action = TopicActions
-| where action['$kind'] == "HttpRequestAction"
-| extend Url = tostring(action.url.literalValue)
-| extend ParsedUrl = parse_url(Url)
-| extend Host = tostring(ParsedUrl["Host"])
-| where Host has_any ("graph.microsoft.com", "management.azure.com", "vault.azure.net", "login.microsoftonline.com")
-| project AIAgentName, CreatorAccountUpn, Host, Url, AgentStatus, AccessControlPolicy
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))
+| mv-expand DCM = RawAgentInfo.declarativeCopilotMetadata
+| mv-expand Action = DCM.actions
+| mv-expand Api = Action.apis
+| extend ApiType = tostring(Api.type)
+| where ApiType in ("OpenApi", "RemoteMCPServer")
+| mv-expand Url = Api.serverUrls
+| extend Url = tostring(Url)
+| where isnotempty(Url)
+| extend Host = tostring(parse_url(Url).Host),
+         Port = tostring(parse_url(Url).Port),
+         Scheme = tostring(parse_url(Url).Scheme)
+| extend NonStandardPort = isnotempty(Port) and Port !in ("443", "80", ""),
+         InsecureScheme = Scheme != "https"
+| project Name, Platform, ApiType, Scheme, Host, Port, Url,
+          NonStandardPort, InsecureScheme,
+          AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers)
+| order by NonStandardPort desc, InsecureScheme desc, Host asc
 ```
+
+**Post-processing:**
+- `InsecureScheme == true` (non-HTTPS) or `NonStandardPort == true` → review the connector; data may transit insecurely.
+- Unfamiliar external hosts on broadly-accessible agents (`AllowAllUsers == "true"`) → highest priority.
+
+> **Coverage caveat:** Only `OpenApi` + `RemoteMCPServer` connectors declare `serverUrls`. Power Platform `api_action` connectors (the majority) do not expose a URL here, so their destinations are not inventoried by this query. The old topic-level `HttpRequestAction` parsing is not applicable to `AgentsInfo`.
 
 ### Query 10: Top Creators & Naming Hygiene
 
-👥 **Governance query** — identifies prolific agent creators and names lacking descriptiveness (e.g., generic "Agent" names).
+👥 **Governance query** — identifies prolific agent creators and names lacking descriptiveness. Creator is a GUID in `RawAgentInfo.creatorId`; resolve to UPN via an `IdentityInfo` join.
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| summarize 
+let IdMap = materialize(IdentityInfo
+    | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
+    | distinct AccountObjectId, AccountUpn);
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| extend CreatorId = tostring(RawAgentInfo.creatorId)
+| where isnotempty(CreatorId)
+| join kind=leftouter IdMap on $left.CreatorId == $right.AccountObjectId
+| extend CreatorUpn = coalesce(AccountUpn, CreatorId)
+| summarize
     AgentCount = count(),
-    PublishedCount = countif(AgentStatus == "Published"),
-    GenericNameCount = countif(AIAgentName in~ ("Agent", "agent", "Test", "test")),
-    NoDescriptionCount = countif(isempty(AgentDescription)),
-    AgentNames = make_set(AIAgentName, 10)
-    by CreatorAccountUpn
+    PublishedCount = countif(PublishedStatus == "Published"),
+    GenericNameCount = countif(Name in~ ("Agent", "agent", "Test", "test", "New Agent")),
+    NoDescriptionCount = countif(isempty(Description)),
+    AgentNames = make_set(Name, 10)
+    by CreatorUpn
 | order by AgentCount desc
 | take 20
 ```
+
+> **Coverage caveat:** Only agents with a populated `RawAgentInfo.creatorId` are attributed. Creators whose GUID does not resolve in `IdentityInfo` fall back to the raw GUID. A single creator with a very high `AgentCount` is a sprawl signal worth investigating.
 
 ### Query 11: Agent Creation Trend
 
 📈 **Trend query** — shows agent creation velocity over time to detect sprawl acceleration.
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| summarize AgentsCreated = count() by bin(AgentCreationTime, 7d)
-| order by AgentCreationTime asc
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(CreatedDateTime)
+| summarize AgentsCreated = count() by bin(CreatedDateTime, 7d)
+| order by CreatedDateTime asc
 ```
 
-### Query 12: Full Tools Inventory (All Tool Types)
+### Query 12: Full Capability / Tools Inventory
 
-🛠️ **Tools governance query** — catalogs all tools (not just MCP) across agents to understand the full capability surface.
+🛠️ **Tools governance query** — catalogs the operations agents can invoke across all connector types, to understand the full capability surface. Parses DCM operations (`operationId` + API `type`).
 
 ```kql
-AIAgentsInfo
-| summarize arg_max(Timestamp, *) by AIAgentId
-| where AgentStatus != "Deleted"
-| where isnotempty(AgentToolsDetails)
-| mv-expand Tool = AgentToolsDetails
-| extend 
-    ToolKind = tostring(Tool.action.operationDetails["$kind"]),
-    ToolDisplayName = tostring(Tool.modelDisplayName),
-    OperationId = tostring(Tool.action.operationId)
-| summarize AgentCount = dcount(AIAgentId), Agents = make_set(AIAgentName, 5) by ToolKind, OperationId, ToolDisplayName
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))
+| mv-expand DCM = RawAgentInfo.declarativeCopilotMetadata
+| mv-expand Action = DCM.actions
+| mv-expand Api = Action.apis
+| mv-expand Op = Api.operations
+| extend OperationId = tostring(Op.operationId), ApiType = tostring(Api.type)
+| where isnotempty(OperationId)
+| summarize AgentCount = dcount(AgentId), Agents = make_set(Name, 5) by OperationId, ApiType
 | order by AgentCount desc
 ```
+
+**Alternative for non-DCM agents** — the flat `DeclaredTools` column (`{type, name}`) covers agents without DCM:
+
+```kql
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where array_length(DeclaredTools) > 0
+| mv-expand Tool = DeclaredTools
+| summarize AgentCount = dcount(AgentId)
+    by ToolType = tostring(Tool.type), ToolName = tostring(Tool.name)
+| order by AgentCount desc
+```
+
+> **Coverage caveat:** The DCM query yields deep operation-level detail but only for the connector-sourced subset. The `DeclaredTools` fallback is broader but flatter (tool name/type only, no operation IDs). Run both for the fullest picture.
+
+### Query 13: Operation-Level Privilege Mapping
+
+🔐 **Privilege query** — buckets every declared operation into a **sensitivity category** (mail-send, directory-write, data-write, messaging, security-tooling, read/other) to surface where write/exfiltration capability concentrates. Feeds the **Capability Privilege Index** supplementary indicator.
+
+```kql
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))
+| mv-expand DCM = RawAgentInfo.declarativeCopilotMetadata
+| mv-expand Action = DCM.actions
+| mv-expand Api = Action.apis
+| mv-expand Op = Api.operations
+| extend OperationId = tostring(Op.operationId)
+| where isnotempty(OperationId)
+| extend PrivilegeCategory = case(
+    OperationId has_any ("Send an email", "SendEmail", "Send email"), "Mail-Send",
+    OperationId has_any ("AddUserToGroup", "RemoveMember", "UpdatePerson", "UpdateOrganisation", "Create user", "Delete user", "Update user", "Assign"), "Directory-Write",
+    OperationId has_any ("unbound action", "Create a row", "Update a row", "Delete a row", "Create record", "Update record"), "Data-Write",
+    OperationId has_any ("Post message", "Post a message", "Send message", "Create chat", "post in a chat"), "Messaging",
+    OperationId has_any ("Security Copilot", "Sentinel"), "Security-Tooling",
+    "Other/Read")
+| summarize AgentCount = dcount(AgentId) by PrivilegeCategory
+| order by AgentCount desc
+```
+
+**Capability Privilege Index** — distinct agents holding ≥1 *sensitive* (write/send) operation, split by broad access:
+
+```kql
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| where isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))
+| extend AllowAllUsers = tostring(RawAgentInfo.allowForAllUsers)
+| mv-expand DCM = RawAgentInfo.declarativeCopilotMetadata
+| mv-expand Action = DCM.actions
+| mv-expand Api = Action.apis
+| mv-expand Op = Api.operations
+| extend OperationId = tostring(Op.operationId)
+| where OperationId has_any ("Send an email", "SendEmail", "AddUserToGroup", "RemoveMember", "UpdatePerson", "UpdateOrganisation", "unbound action", "Create a row", "Update a row", "Delete a row", "Post message", "post in a chat")
+| summarize SensitiveAgents = dcount(AgentId),
+            BroadAndSensitive = dcountif(AgentId, AllowAllUsers == "true")
+```
+
+> **Interpretation:** `BroadAndSensitive > 0` is a direct privilege-abuse signal — a broadly-accessible agent that can write to the directory, write data, or send mail. These agents justify maxing the Broad Access and/or XPIA dimensions. Tune the operation keyword lists to your tenant's connector set.
+
+### Query 14: Deep-Manifest Coverage (Report Banner)
+
+📊 **Coverage query** — reports what fraction of the fleet carries the deep `declarativeCopilotMetadata` (DCM) that the XPIA, endpoint, and capability queries depend on. **Run this every report** and surface the result as a banner so the analyst knows what was *not* fully inspected.
+
+```kql
+AgentsInfo
+| summarize arg_max(Timestamp, *) by AgentId
+| where LifecycleStatus != "Deleted"
+| summarize Total = count(),
+            WithDCM = countif(isnotempty(tostring(RawAgentInfo.declarativeCopilotMetadata))),
+            WithInstructions = countif(isnotempty(Instructions)),
+            WithObservabilityID = countif(isnotempty(ObservabilityID)),
+            WithEntraAgentID = countif(isnotempty(EntraAgentID))
+| extend DcmCoveragePct = round(100.0 * WithDCM / Total, 1),
+         InstrCoveragePct = round(100.0 * WithInstructions / Total, 1),
+         ObsIdPct = round(100.0 * WithObservabilityID / Total, 1),
+         EntraIdPct = round(100.0 * WithEntraAgentID / Total, 1)
+```
+
+> **Why both ID columns:** `ObservabilityID` is near-universally populated (~100%) and is the natural runtime-correlation handle; `EntraAgentID` is sparse (only agents provisioned with an Entra Agent ID). Report both so the analyst knows which runtime/identity correlations are feasible.
+
+### Query 15: Runtime Correlation — Active-and-Dangerous (Scoped)
+
+🎯 **Runtime query (Phase 5)** — confirms which *flagged* agents are actually active. **Scoped by name list — no fleet-wide join** (see Phase 5 for why a full join times out). Populate `FlaggedNames` from the Q4 broadly-accessible and Q13 sensitive-op results.
+
+```kql
+let FlaggedNames = dynamic(["<broadly-accessible or sensitive-op agent names from Q4/Q13>"]);
+CopilotActivity
+| where TimeGenerated > ago(7d)
+| where AgentName in (FlaggedNames)
+| summarize Interactions = count(),
+            DistinctUsers = dcount(ActorUserId),
+            LastSeen = max(TimeGenerated),
+            SrcIPs = dcount(SrcIpAddr) by AgentName
+| order by Interactions desc
+```
+
+> **Interpretation:** A flagged agent appearing here with real `Interactions` is **active-and-dangerous** — prioritize for remediation over dormant flagged agents. **Join key is `AgentName`** (`CopilotActivity.AgentId` is a composite prefixed string that does NOT equal `AgentsInfo.AgentId`). Absence here does not prove dormancy — most `CopilotActivity` rows are unattributed (empty `AgentName`). `AIModelName` is sparse in this table; do not rely on it for model inventory.
 
 ---
 
@@ -600,9 +748,13 @@ Render the following sections in order. Omit sections only if explicitly noted a
 # 🤖 AI Agent Security Posture Report
 
 **Generated:** YYYY-MM-DD HH:MM UTC
-**Data Source:** AIAgentsInfo (Advanced Hunting)
+**Data Source:** AgentsInfo (Advanced Hunting)
 **Analysis Period:** <EarliestRecord> → <LatestRecord>
-**Platform:** Copilot Studio
+**Platforms:** <list discovered Platform values>
+
+---
+
+> 📊 **Deep-Manifest Coverage (Q14):** `<WithDCM>/<Total>` agents (**<DcmCoveragePct>%**) carry `declarativeCopilotMetadata` — the XPIA, external-endpoint, and capability findings below cover **only this subset**. Instructions present on **<InstrCoveragePct>%**, ObservabilityID on **<ObsIdPct>%** (runtime-correlation handle), EntraAgentID on **<EntraIdPct>%**. The remaining `<Total - WithDCM>` agents were inventoried but not deeply inspected.
 
 ---
 
@@ -620,92 +772,92 @@ Render the following sections in order. Omit sections only if explicitly noted a
 |--------|-------|
 | Total Agents (non-deleted) | <N> |
 | Published Agents | <N> |
-| Created (Draft) Agents | <N> |
-| Unique Creators | <N> |
-| Environments | <N> |
-| Agents with No Authentication | <N> |
-| Agents with MCP Tools | <N> |
-| Agents with Knowledge Sources | <N> |
-| Agents with GenAI + Email (XPIA Risk) | <N> |
+| Draft Agents | <N> |
+| Platforms Represented | <N> |
+| Resolved Creators (lower bound) | <N> |
+| Broadly-Accessible Agents (allowForAllUsers) | <N> |
+| Agents with MCP Servers | <N> |
+| Agents with Declared Data Sources | <N> |
+| Email-Capable Agents (XPIA Risk) | <N> |
+
+> ℹ️ **Coverage note:** Creator and capability metrics are derived from `RawAgentInfo` and `declarativeCopilotMetadata`, which are sparsely populated. Counts marked "lower bound" reflect only agents with the relevant field present — see per-section caveats.
 
 ---
 
-## 🔐 Authentication & Access Control
+## 🔓 Access Posture
 
-### Authentication Types
-| Type | Count |
-|------|-------|
-| Integrated | <N> |
-| None | <N> |
-| Custom | <N> |
+> **Authentication-type gap:** `AgentsInfo` has no equivalent to the old `UserAuthenticationType` (None/Microsoft/Custom). The `ToolsAuthenticationType` column is effectively empty in practice. Access exposure is assessed via the `RawAgentInfo.allowForAllUsers` governance signal instead — a **proxy for broad exposure, not an authentication state**.
 
-### Access Control Policies
-| Policy | Count |
-|--------|-------|
-| Agent readers | <N> |
-| Group membership | <N> |
-| Any | <N> |
-| Any (multitenant) | <N> |
+### Access Distribution (Q3)
+| App Type | Allow-All-Users | Count |
+|----------|-----------------|-------|
+| <appType> | <true/false> | <N> |
 
-### 🔴 Unauthenticated Agents
+### 🔴 Broadly-Accessible Agents (Q4)
 
 <If Q4 returns results:>
-| Agent Name | Status | Creator | Access Policy | GenAI Enabled | Created |
-|------------|--------|---------|---------------|---------------|---------|
-| <name> | <status> | <upn> | <policy> | <yes/no> | <date> |
+| Agent Name | Platform | App Type | Published | Created |
+|------------|----------|----------|-----------|---------|
+| <name> | <platform> | <appType> | <status> | <date> |
 
 <If Q4 returns 0:>
-✅ No unauthenticated agents detected.
+✅ No broadly-accessible agents (`allowForAllUsers == "true"`) detected.
 
 ---
 
 ## 📧 XPIA Email Exfiltration Risk
 
 <If Q5 returns results:>
-| Agent Name | Creator | Inputs AI-Controlled | Auth Type | Access Policy |
-|------------|---------|---------------------|-----------|---------------|
-| <name> | <upn> | 🔴 Yes / 🟢 No | <type> | <policy> |
+| Agent Name | Platform | Email Operation | Broadly Accessible |
+|------------|----------|-----------------|--------------------|
+| <name> | <platform> | <operationId> | 🔴 Yes / 🟢 No |
 
 **Risk Assessment:**
-- 🔴 Agents with AI-controlled email inputs can be exploited via XPIA to exfiltrate data
-- ⚠️ Recommendation: Hardcode email recipients or remove SendEmailV2 from GenAI agents
+- 🔴 Email-capable agents can be exploited via XPIA to exfiltrate data, especially when combined with declared data sources (Q7).
+- ⚠️ Recommendation: Review recipient controls; apply Power Platform DLP and Defender Runtime Protection.
+
+> **Coverage caveat:** Email capability is detected from DCM `operations[].operationId` (e.g., "Send an email", "SendEmail"). There is no longer a GenAI-orchestration flag or an `inputs` field, so AI-controlled-vs-hardcoded recipient distinction is **not available** — treat all email-capable agents as candidates. Only the DCM-bearing subset is covered.
 
 <If Q5 returns 0:>
-✅ No agents combine generative orchestration with email tools.
+✅ No email-capable agents detected in the DCM-bearing subset.
 
 ---
 
-## 🛠️ MCP Tool Exposure
+## 🛠️ MCP Server Exposure
 
 <If Q6 returns results:>
-| Agent Name | Creator | MCP Tools | Access Policy | Auth Type |
-|------------|---------|-----------|---------------|-----------|
-| <name> | <upn> | <tool list> | <policy> | <type> |
+| Agent Name | Platform | MCP Servers | Broadly Accessible |
+|------------|----------|-------------|--------------------|
+| <name> | <platform> | <server list> | <yes/no> |
 
-**MCP Tool Distribution:**
-| MCP Tool | Agent Count |
-|----------|-------------|
-| <tool> | <N> |
+**MCP Server Distribution:**
+| MCP Server | Agent Count |
+|------------|-------------|
+| <server> | <N> |
 
 <If Q6 returns 0:>
-✅ No agents with MCP tools detected.
+✅ No agents with MCP servers detected.
+
+> **Coverage caveat:** The `McpServers` column is flat (`{name, description}` only) — no server URLs, credential config, or transport detail. Non-HTTPS/hardcoded-cred MCP detection from the old schema is not possible here.
+
+> **Dimension note:** MCP exposure and the External Endpoint findings (below) both feed the single **Tool & Endpoint Exposure** score dimension. Any insecure scheme, non-standard port, or external endpoint on a broadly-accessible agent escalates that dimension to High regardless of MCP count.
 
 ---
 
-## 📚 Knowledge Source Exposure
+## 📚 Declared Data Source Exposure
 
 <If Q7 returns results:>
-| Source Type | Count | Example |
-|-------------|-------|---------|
-| SharePointSearchSource | <N> | <sample site> |
-| PublicSiteSearchSource | <N> | <sample site> |
-| FederatedStructuredSearchSource | <N> | <sample> |
+| Agent Name | Platform | Data Sources | Broadly Accessible |
+|------------|----------|--------------|--------------------|
+| <name> | <platform> | <source names> | <yes/no> |
 
 **⚠️ High-Risk Combinations:**
-<List agents with internal data sources + broad access policies>
+<List agents with declared data sources + allowForAllUsers == "true", and agents combining data sources with email capability (Q5)>
 
 <If Q7 returns 0:>
-✅ No knowledge sources configured on any agents.
+✅ No declared data sources found on any agents.
+
+> **Coverage caveat:** `DeclaredDataSources` stores source **names/filenames** only — source *type* classification (SharePoint vs public site vs federated) is not available.
 
 ---
 
@@ -713,30 +865,28 @@ Render the following sections in order. Omit sections only if explicitly noted a
 
 <If Q8 returns results:>
 🔴 **Hard-coded credential patterns detected in <N> agent(s):**
-| Agent Name | Status | Creator |
-|------------|--------|---------|
-| <name> | <status> | <upn> |
+| Agent Name | Platform | Status | Creator |
+|------------|----------|--------|---------|
+| <name> | <platform> | <status> | <creatorId/upn> |
 
 ⚠️ **Recommendation:** Move secrets to Azure Key Vault; use environment variables at runtime.
 
 <If Q8 returns 0:>
-✅ No hard-coded credential patterns detected in agent topics or actions.
+✅ No hard-coded credential patterns detected in agent instructions or connector metadata.
 
 ---
 
-## 🌐 HTTP Request Risk
+## 🌐 External Endpoint & HTTP Risk
 
 <If Q9 returns results:>
-**Non-Standard Ports:**
-| Agent | Host | Port | URL |
-|-------|------|------|-----|
-
-**Sensitive Endpoints:**
-| Agent | Host | URL |
-|-------|------|-----|
+| Agent | API Type | Scheme | Host | Port | Insecure | Non-Standard Port |
+|-------|----------|--------|------|------|----------|-------------------|
+| <name> | <OpenApi/RemoteMCPServer> | <scheme> | <host> | <port> | 🔴/🟢 | 🔴/🟢 |
 
 <If Q9 returns 0:>
-✅ No HTTP requests to non-standard ports or sensitive endpoints detected.
+✅ No external endpoints with insecure schemes or non-standard ports detected.
+
+> **Coverage caveat:** Only `OpenApi` + `RemoteMCPServer` connectors declare `serverUrls`. Power Platform `api_action` connectors do not expose destination URLs.
 
 ---
 
@@ -745,11 +895,13 @@ Render the following sections in order. Omit sections only if explicitly noted a
 ### Top Creators
 | Creator | Agents | Published | Generic Names | No Description |
 |---------|--------|-----------|---------------|----------------|
-| <upn> | <N> | <N> | <N> | <N> |
+| <upn/creatorId> | <N> | <N> | <N> | <N> |
 
 ### Naming Hygiene
 - Agents with generic names ("Agent", "Test"): <N>
 - Agents with no description: <N>
+
+> **Coverage caveat:** Only agents with a populated `RawAgentInfo.creatorId` are attributed; GUIDs unresolved in `IdentityInfo` fall back to the raw GUID.
 
 ---
 
@@ -759,11 +911,51 @@ Render the following sections in order. Omit sections only if explicitly noted a
 
 ---
 
-## 🛠️ Full Tools Inventory
+## 🛠️ Full Capability / Tools Inventory
 
-| Tool Kind | Operation | Agent Count | Example Agents |
-|-----------|-----------|-------------|----------------|
-| <kind> | <operationId> | <N> | <agent names> |
+| Operation / Tool | API / Tool Type | Agent Count | Example Agents |
+|------------------|-----------------|-------------|----------------|
+| <operationId/name> | <type> | <N> | <agent names> |
+
+---
+
+## 🔐 Capability Privilege Index (Supplementary — not summed into score)
+
+**Operation sensitivity distribution (Q13):**
+| Privilege Category | Agent Count |
+|--------------------|-------------|
+| Mail-Send | <N> |
+| Directory-Write | <N> |
+| Data-Write | <N> |
+| Messaging | <N> |
+| Security-Tooling | <N> |
+| Other/Read | <N> |
+
+**Index:** <SensitiveAgents> agent(s) hold ≥1 sensitive (write/send) operation; **<BroadAndSensitive>** of those are also broadly accessible (`allowForAllUsers == "true"`).
+
+<If BroadAndSensitive > 0:>
+🔴 **<BroadAndSensitive> broadly-accessible agent(s) with sensitive write/send capability** — direct privilege-abuse exposure. These justify maxing the Broad Access and/or XPIA dimensions.
+
+<If BroadAndSensitive == 0:>
+✅ No broadly-accessible agents hold sensitive write/send operations (within the DCM-bearing subset).
+
+> Supplementary indicator — provides privilege context but is **not** added to the /100 composite. Coverage limited to the DCM-bearing subset (see banner).
+
+---
+
+## 🎯 Runtime Correlation — Active-and-Dangerous (Q15, Optional)
+
+<If Phase 5 was run — flagged agents correlated against CopilotActivity:>
+| Agent Name | Interactions | Distinct Users | Source IPs | Last Seen |
+|------------|--------------|----------------|------------|-----------|
+| <name> | <N> | <N> | <N> | <date> |
+
+🔴 **Active-and-dangerous:** Flagged agents (broadly accessible / sensitive ops) confirmed active at runtime — prioritize for remediation over dormant flagged agents.
+
+<If no flagged agents appear in CopilotActivity:>
+✅ No flagged agents showed runtime activity in the window. *(Caveat: most `CopilotActivity` rows are unattributed — absence does not prove dormancy.)*
+
+> Scoped name-based lookup (`AgentName` key). Runtime attribution is inherently low-coverage; this section confirms presence, not absence.
 
 ---
 
@@ -774,11 +966,15 @@ Render the following sections in order. Omit sections only if explicitly noted a
 │          AGENT SECURITY SCORE: <NN>/100              │
 │              Rating: <EMOJI> <RATING>                │
 ├──────────────────────────────────────────────────────┤
-│ Unauth Agents    [<bar>] <N>/20  (<detail>)          │
+│ Broad Access     [<bar>] <N>/20  (<detail>)          │
 │ XPIA Email Risk  [<bar>] <N>/20  (<detail>)          │
-│ MCP Tool Exposure[<bar>] <N>/20  (<detail>)          │
-│ Knowledge Risk   [<bar>] <N>/20  (<detail>)          │
+│ Tool & Endpt Expo[<bar>] <N>/20  (<detail>)          │
+│ Data Source Risk [<bar>] <N>/20  (<detail>)          │
 │ Credential Hygn  [<bar>] <N>/20  (<detail>)          │
+├──────────────────────────────────────────────────────┤
+│ Supplementary (not scored):                          │
+│  Capability Privilege Index: <S> sensitive / <B> broad│
+│  Deep-Manifest Coverage:     <DcmCoveragePct>%        │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -810,6 +1006,9 @@ Render the following sections in order. Omit sections only if explicitly noted a
 | Q1 | Global Inventory | <N> | <time> |
 | Q2 | Status & Auth Breakdown | <N> | <time> |
 | ... | ... | ... | ... |
+| Q13 | Operation-Level Privilege Mapping | <N> | <time> |
+| Q14 | Deep-Manifest Coverage | <N> | <time> |
+| Q15 | Runtime Correlation (scoped, optional) | <N> | <time> |
 ````
 
 ---
@@ -825,9 +1024,9 @@ reports/ai-agent-posture/AI_Agent_Posture_Report_YYYYMMDD_HHMMSS.md
 Include the following additional sections in the file report that are omitted from inline:
 
 1. **Full agent detail table** (all non-deleted agents with key fields)
-2. **Per-environment breakdown** (agent counts and creators by EnvironmentId)
-3. **Complete knowledge source listing** (every source URL, not just examples)
-4. **Complete MCP agent listing** (every MCP agent with full tool list)
+2. **Per-platform breakdown** (agent counts and creators by `Platform`)
+3. **Complete data source listing** (every declared source name, not just examples)
+4. **Complete MCP agent listing** (every MCP agent with full server list)
 5. **Raw query references** — note that full query definitions are in this SKILL.md file
 
 ### File Report Header
@@ -836,22 +1035,27 @@ Include the following additional sections in the file report that are omitted fr
 # AI Agent Security Posture Report
 
 **Generated:** YYYY-MM-DD HH:MM UTC
-**Data Source:** AIAgentsInfo (Advanced Hunting — Preview)
+**Data Source:** AgentsInfo (Advanced Hunting)
 **Analysis Period:** <EarliestRecord> → <LatestRecord> (<N> days)
-**Platform:** Copilot Studio
-**Environments:** <N> (<list environment IDs>)
-**Total Agents:** <N> (Published: <N>, Created: <N>)
+**Platforms:** <list discovered Platform values>
+**Total Agents:** <N> (Published: <N>, Draft: <N>)
+
+---
+
+> 📊 **Deep-Manifest Coverage (Q14):** `<WithDCM>/<Total>` agents (**<DcmCoveragePct>%**) carry `declarativeCopilotMetadata`; XPIA/endpoint/capability findings cover only this subset. ObservabilityID **<ObsIdPct>%**, EntraAgentID **<EntraIdPct>%**.
 
 ---
 ```
+
+Include the **Capability Privilege Index** and (if Phase 5 ran) **Runtime Correlation** sections from the inline template in the file report as well.
 
 ---
 
 ## Known Pitfalls
 
-### 1. AIAgentsInfo Is Advanced Hunting Only
+### 1. AgentsInfo Is Advanced Hunting Only
 
-**Problem:** The `AIAgentsInfo` table does NOT exist in Sentinel Data Lake. Querying via `mcp_sentinel-data_query_lake` returns `SemanticError: Failed to resolve table`.
+**Problem:** The `AgentsInfo` table does NOT exist in Sentinel Data Lake. Querying via `mcp_sentinel-data_query_lake` returns `SemanticError: Failed to resolve table`.
 
 **Solution:** Always use `RunAdvancedHuntingQuery`. The table has 30-day retention in AH.
 
@@ -859,66 +1063,61 @@ Include the following additional sections in the file report that are omitted fr
 
 **Problem:** The table logs configuration snapshots over time. Querying without deduplication returns inflated counts and duplicate agent entries.
 
-**Solution:** Always use `| summarize arg_max(Timestamp, *) by AIAgentId` to get the latest state per agent before any analysis.
+**Solution:** Always use `| summarize arg_max(Timestamp, *) by AgentId` to get the latest state per agent before any analysis. Note `AgentId` is a **guid** and the column is `Name`/`Description` (not `AgentName`/`AgentDescription` as some docs state).
 
-### 3. AgentToolsDetails and AgentTopicsDetails Are Dynamic
+### 3. RawAgentInfo Is the Real Detail Source
 
-**Problem:** `AgentToolsDetails` and `AgentTopicsDetails` are `dynamic` type columns containing arrays of objects. You must `mv-expand` before accessing nested properties.
+**Problem:** The normalized columns (`DeclaredTools`, `McpServers`, `DeclaredDataSources`, `Owners`, `Capabilities`) are **sparsely populated and flat**. The rich governance/configuration detail lives in the `RawAgentInfo` dynamic column (populated for ~all agents) and, for the connector-sourced subset, in `RawAgentInfo.declarativeCopilotMetadata` (DCM).
 
-**Solution:** Always `mv-expand` first:
-```kql
-| mv-expand Tool = AgentToolsDetails
-| extend OperationId = tostring(Tool.action.operationId)
-```
+**Solution:** For creator (`RawAgentInfo.creatorId`), broad access (`RawAgentInfo.allowForAllUsers`), app type (`RawAgentInfo.appType`), and deep capability/endpoint detail, parse `RawAgentInfo`. `RawAgentInfo` is dynamic — no double-parse needed; access nested keys directly with `tostring(RawAgentInfo.key)`.
 
-### 4. KnowledgeDetails Is a String Containing JSON
+### 4. declarativeCopilotMetadata (DCM) Covers Only a Subset
 
-**Problem:** Despite containing structured data, `KnowledgeDetails` is a `string` column. The string contains a JSON array where each element is itself a JSON string.
+**Problem:** Deep capability queries (Q5 email, Q9 endpoints, Q12 operations) depend on `RawAgentInfo.declarativeCopilotMetadata`, which is present for only ~10% of Copilot Studio agents (the connector-sourced subset). The majority have only a shallow manifest.
 
-**Solution:** Double-parse:
-```kql
-| mv-expand KnowledgeRaw = parse_json(KnowledgeDetails)
-| extend KnowledgeJson = parse_json(tostring(KnowledgeRaw))
-| extend SourceKind = tostring(KnowledgeJson.source["$kind"])
-```
+**Solution:** Always state the coverage caveat in reports. DCM path: `declarativeCopilotMetadata[].actions[].apis[]` with `.type` (OpenApi/RemoteMCPServer/api_action), `.serverUrls[]`, and `.operations[].operationId`. Results from these queries are a **floor, not a complete inventory**.
 
-### 5. Table Is in Preview
+### 5. Authentication-Type Detection Has No Equivalent
 
-**Problem:** `AIAgentsInfo` is currently in Preview. Schema may change, columns may be added/removed, and data population depends on Copilot Studio and Defender XDR deployment.
+**Problem:** The old `UserAuthenticationType` (None/Microsoft/Custom) is gone. The `ToolsAuthenticationType` column exists in schema but is effectively empty (~100% blank). There is **no way** to classify agents as "unauthenticated" the way the old skill did.
 
-**Impact:** If the table returns 0 results, confirm that the organization has Copilot Studio agents and that the Defender XDR service is deployed.
+**Solution:** Use `RawAgentInfo.allowForAllUsers == "true"` as a **broad-exposure proxy** (documented as a proxy, NOT an authentication state). Never claim an agent is "unauthenticated" — say "broadly accessible".
 
-### 6. CreatorAccountUpn May Be Empty
+### 6. Many Schema Columns Are Empty in Practice
 
-**Problem:** Some agents (e.g., system-created `Copilot in Power Apps`) have an empty `CreatorAccountUpn`.
+**Problem:** `ToolsAuthenticationType`, `Availability`, `Endpoints`, `Triggers`, `Permissions`, and `Model` are present in the schema but empty/null in practice. Queries built on them silently return 0 rows.
 
-**Solution:** Handle empty creators gracefully in governance analysis. Filter or group them separately.
+**Solution:** Do not build core logic on these columns. Validate population with a quick `summarize countif(isnotempty(<col>))` before relying on a column. `LifecycleStatus` is blank for active agents (only `Deleted` is populated) — `LifecycleStatus != "Deleted"` correctly passes blanks.
 
-### 7. Hard-Coded Credential Regex May Produce False Positives
+### 7. creatorId Is a GUID — Join IdentityInfo for UPN
 
-**Problem:** The Q8 credential scan regex matches patterns like JWT tokens (`eyJ...`), which may appear legitimately in topic definitions (e.g., example payloads in documentation topics).
+**Problem:** `RawAgentInfo.creatorId` is an Entra object GUID, not a UPN. There is no `CreatorAccountUpn`, `LastModifiedByUpn`, or `LastPublishedByUpn` equivalent.
 
-**Solution:** Always manually review matches. Flag Published agents as higher risk than Created (draft) agents.
+**Solution:** Resolve via `leftouter` join to `IdentityInfo` on `AccountObjectId`, then `coalesce(AccountUpn, CreatorId)`. Creator attribution is a lower bound — `creatorId` is sparse.
 
-### 8. IsGenerativeOrchestrationEnabled May Be Null
+### 8. serverUrls Only Populated for OpenApi & RemoteMCPServer
 
-**Problem:** Some agents have `null` for `IsGenerativeOrchestrationEnabled` rather than `true`/`false`.
+**Problem:** External endpoint URLs in DCM `apis[].serverUrls` are populated for `OpenApi` and `RemoteMCPServer` connector types, but **not** for `api_action` (Power Platform connectors, the majority). Filtering all API types yields mostly empty URLs.
 
-**Solution:** Treat `null` as unknown. In Q5 (XPIA risk), filter explicitly on `== true` to avoid false positives.
+**Solution:** Filter `ApiType in ("OpenApi", "RemoteMCPServer")` before expanding `serverUrls`. State that `api_action` destinations are not inventoried.
 
-### 9. GenAI Orchestrator Bypasses Topics for Tool Invocation
+### 9. McpServers Is Flat (Name/Description Only)
 
-**Problem:** When `IsGenerativeOrchestrationEnabled == true`, the AI orchestrator invokes tools (e.g., `SendEmailV2`) directly based on its plan — it does NOT route through authored topic flows in `AgentTopicsDetails`. This means topic-level validation logic (e.g., domain checks, recipient restrictions added to a topic) is **not a defense** against XPIA attacks on GenAI agents.
+**Problem:** The dedicated `McpServers` column contains only `{name, description}` — no server URLs, credential configuration, or transport detail. Non-HTTPS MCP detection and hardcoded-cred-in-MCP detection from the old design are not possible.
 
-**Impact:** Do not recommend topic-level controls as an XPIA mitigation for generative agents. The attack surface is entirely in the `AgentToolsDetails` layer (tools the orchestrator can invoke). The documented mitigations are: (1) Hardcode email inputs at the action level, (2) Power Platform DLP connector policies, (3) Microsoft Defender Runtime Protection (webhook-based real-time tool invocation inspection).
+**Solution:** Use `McpServers` for inventory/exposure counts only. For MCP server endpoints, fall back to the DCM `RemoteMCPServer` API type (Q9).
 
-**Telemetry note:** Q5 inspects `AgentToolsDetails.inputs` (action-level hardcoded values). Topic-level conditions are invisible to this query and unreliable as a control for GenAI agents.
+### 10. AH Booleans Are Textual True/False (Feb 25, 2026)
 
-### 10. AgentTopicsDetails Contains System-Default Boilerplate
+**Problem:** Since Feb 25, 2026, Advanced Hunting boolean results render as textual `True`/`False`, not `1`/`0`. Governance flags from `RawAgentInfo` (e.g., `allowForAllUsers`) are JSON strings (`"true"`/`"false"`).
 
-**Problem:** `AgentTopicsDetails` for most agents contains only system-default topics (~8–13 per agent): Greeting, Goodbye, Escalate, Error, CSAT Survey, OnSignIn, ConversationStart, OnUnknownIntent. The `displayName` field is typically empty. Conditions within these topics are system boilerplate (survey yes/no, error handling), not custom business logic.
+**Solution:** Compare against the string form: `tostring(RawAgentInfo.allowForAllUsers) == "true"`. Avoid `== 1` / `== true` numeric/bool comparisons on parsed JSON values.
 
-**Impact:** Do not expect `AgentTopicsDetails` to contain actionable security controls or custom domain validation. For GenAI agents, the real capability surface is `AgentToolsDetails` — topics are scripted dialog fallbacks that the orchestrator largely bypasses.
+### 11. CopilotActivity Correlation — Composite AgentId & Fleet-Join Timeouts
+
+**Problem:** Phase 5 runtime correlation against `CopilotActivity` has three traps: (1) `CopilotActivity.AgentId` is a **composite/prefixed string** (e.g., `T_<tenant>.<guid>`, `CopilotStudio.Declarative.T_….gpt.<guid>`, or literals like `AgentBuilder`) that does **not** equal the clean `AgentsInfo.AgentId` GUID — ID joins return 0 matches. (2) A fleet-wide `AgentsInfo` ↔ `CopilotActivity` join (~15k agents × 100k+ rows, heavy `RawAgentInfo`) **times out** the AH endpoint. (3) Most `CopilotActivity` rows have an **empty** `AgentName`/`AgentId` (general M365 Copilot usage), so runtime attribution is low-coverage.
+
+**Solution:** Use a **scoped name-based lookup** (Query 15): build a small flagged-name list from Q4/Q13, then `CopilotActivity | where AgentName in (FlaggedNames)` — no join. **`AgentName` is the reliable cross-table key.** Never join the full fleet. Treat absence from `CopilotActivity` as *unconfirmed*, not proof of dormancy. `AIModelName` is sparse here — do not use it for model inventory.
 
 ---
 
@@ -926,16 +1125,20 @@ Include the following additional sections in the file report that are omitted fr
 
 Before delivering the report, verify:
 
-- [ ] All queries used `arg_max(Timestamp, *) by AIAgentId` for deduplication
-- [ ] All queries filtered `AgentStatus != "Deleted"` (unless auditing deletions)
+- [ ] All queries used `arg_max(Timestamp, *) by AgentId` for deduplication
+- [ ] All queries filtered `LifecycleStatus != "Deleted"` (unless auditing deletions)
 - [ ] All queries ran via `RunAdvancedHuntingQuery` (not Data Lake)
 - [ ] Zero-result queries are reported with explicit absence confirmation (✅ pattern)
 - [ ] The Agent Security Score calculation is transparent with per-dimension evidence
-- [ ] Unauthenticated agents are flagged with specific risk context (Published vs Created, GenAI, access policy)
-- [ ] XPIA email risk distinguishes AI-controlled vs hardcoded inputs
-- [ ] MCP tool inventory includes tool names, not just counts
-- [ ] Knowledge sources include source type and URL/site reference
-- [ ] Creator governance includes naming hygiene and abandoned agent analysis
+- [ ] Broadly-accessible agents are described as a proxy (NOT "unauthenticated"); the auth-type gap is stated
+- [ ] DCM-dependent sections (XPIA email, external endpoints, capability inventory) include the coverage caveat
+- [ ] **Deep-Manifest Coverage banner (Q14) is present at the top of the report** (DCM %, ObservabilityID %, EntraAgentID %)
+- [ ] **Capability Privilege Index (Q13) is reported** as a supplementary indicator, explicitly noted as NOT summed into the /100 score
+- [ ] **If Phase 5 ran, runtime correlation is SCOPED by `AgentName` (Query 15) — never a fleet-wide join**; absence is described as unconfirmed, not dormant
+- [ ] Score card uses the **Tool & Endpoint Exposure** dimension label (not "MCP Server Expo") and shows the two supplementary indicators
+- [ ] MCP server inventory includes server names, not just counts
+- [ ] Declared data sources note that source-type classification is unavailable
+- [ ] Creator governance resolves `creatorId` GUIDs via `IdentityInfo` and notes the lower-bound caveat
 - [ ] Recommendations are prioritized and evidence-based
 - [ ] All hyperlinks in the report are copied verbatim from the URL Registry — no fabricated or recalled-from-memory URLs
 - [ ] No PII from live environments in the SKILL.md file itself

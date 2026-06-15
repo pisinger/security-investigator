@@ -46,13 +46,13 @@ Both event types share `EventSessionId`, which is the join key for reconstructin
 | **Agent identity is blank on `InvokeAgent` rows** | `SrcAgentId`, `SrcAgentName`, and `SrcAgentOriginalType` are populated only on `ExecuteToolBySDK` rows. User prompt rows arrive with `SrcAgentId == "00000000-0000-0000-0000-000000000000"` and empty `SrcAgentName`. To attribute a prompt to an agent, join on `EventSessionId` to a sibling `ExecuteToolBySDK` row in the same session and pull `SrcAgentName` from there. Queries that group prompts by `SrcAgentName` will produce a single empty-agent bucket if this enrichment is skipped. |
 | `EventEndTime` may be `0001-01-01T00:00:00Z` | Treat as null — use `EventStartTime` / `TimeGenerated` for time analysis. |
 | Agent response not captured | Current preview ingests user prompts only — the agent's reply is not in `EventOriginalResultDetails` for `InvokeAgent` events. For agent reasoning, inspect downstream `ExecuteToolBySDK` rows in the same session. |
-| No content-safety verdict | No Prompt Shield outcome, XPIA flag, or groundedness score lives in this table. Pair with `AIAgentsInfo` (AH-only) for agent posture and Defender for AI alerts for safety signals. |
+| No content-safety verdict | No Prompt Shield outcome, XPIA flag, or groundedness score lives in this table. Pair with `AgentsInfo` (AH-only) for agent posture and Defender for AI alerts for safety signals. |
 
 ### Related Tables
 
 | Table | Platform | Purpose |
 |-------|----------|---------|
-| `AIAgentsInfo` | Advanced Hunting | Agent **inventory & configuration** (auth mode, tools registered, knowledge sources, creators). Companion to this table's runtime telemetry. |
+| `AgentsInfo` | Advanced Hunting | Agent **inventory & configuration** (access posture, tools registered, declared data sources, creators). Companion to this table's runtime telemetry. Join on `SrcAgentId` ↔ `AgentsInfo.EntraAgentID` / `ObservabilityID`. |
 | `CloudAppEvents` (`ActionType == "CopilotInteraction"`) | Workspace (Analytics tier) | M365 Copilot / Copilot Studio prompt + response events with **Prompt Shield / XPIA / jailbreak verdicts** in `CopilotEventData.Messages[]`. Joinable to this table on **agent SPN GUID** — see [Query 9](#query-9-cross-source-correlation-with-cloudappevents). |
 | `GraphAPIAuditEvents` | Advanced Hunting | When agents call Graph API via MCP, those calls also surface here under the agent's SPN. |
 | `MicrosoftGraphActivityLogs` | Data Lake | Same as above, with token/session correlation for >30d. |
@@ -1081,5 +1081,5 @@ A365_AgentToolDaily_KQL_CL
 
 - **Preview schema** — `UnifiedAgentObservability` is part of the Agent 365 / A365 Observability connector preview. Columns may be added, renamed, or populated differently as the feature evolves. Re-validate field availability before promoting any query to production.
 - **Lab-light environments** — In environments with a single agent and low traffic, several columns (`ModelName`, token counts, `EventThoughtProcessDetails`) may always be empty. These queries are designed to degrade gracefully (using `coalesce` / null-safe checks).
-- **Pair with `AIAgentsInfo`** — For agent configuration posture (auth mode, registered tools, knowledge sources), join logically to the AH-only `AIAgentsInfo` table by `SrcAgentId == AIAgentId`. Cross-platform joins are not directly supported — run queries side-by-side and correlate in analysis.
+- **Pair with `AgentsInfo`** — For agent configuration posture (access posture, registered tools, declared data sources), join logically to the AH-only `AgentsInfo` table. Match the runtime `SrcAgentId` to `AgentsInfo.EntraAgentID` or `ObservabilityID` (the agent-config primary key is `AgentId`, a guid). Cross-platform joins are not directly supported — run queries side-by-side and correlate in analysis.
 - **PII in prompts** — `EventOriginalRequestDetails` contains raw user input, which may include sensitive data. Handle query exports with appropriate care and consider applying row-level security if exposing this table to non-SOC users.

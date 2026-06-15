@@ -35,7 +35,7 @@
     "AHDSDicomAuditLogs": "Azure Resources",
     "AHDSDicomDiagnosticLogs": "Azure Resources",
     "AHDSMedTechDiagnosticLogs": "Azure Resources",
-    "AIAgentsInfo": "Microsoft 365 Copilot",
+    "AgentsInfo": "Microsoft 365 Copilot",
     "AMSKeyDeliveryRequests": "Azure Resources",
     "AMSLiveEventOperations": "Azure Resources",
     "AMSMediaAccountHealth": "Azure Resources",

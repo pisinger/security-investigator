@@ -36,19 +36,21 @@ palette:
   text_secondary: "#b2b2b2"
 
 # ─── Score Rating Colors ────────────────────────────────────────────────────
+# Bands MUST match the skill's Interpretation Scale (SKILL.md):
 score_rating_colors:
-  healthy: "#40C5AF"        # green  — 0–25 (low risk)
-  elevated: "#FFC83D"       # yellow — 26–50 (elevated)
-  concerning: "#FF8C00"     # orange — 51–75 (concerning)
-  critical: "#EF6950"       # red    — 76–100 (critical)
+  healthy: "#40C5AF"        # green  — 0–20  (✅ Healthy)
+  elevated: "#FFC83D"       # yellow — 21–45 (🟡 Elevated)
+  concerning: "#FF8C00"     # orange — 46–70 (🟠 Concerning)
+  critical: "#EF6950"       # red    — 71–100 (🔴 Critical)
 
 # ─── Dimension Colors (Agent Security Score — 5 dimensions) ─────────────────
+# Labels match the Agent Security Score Card in the report template exactly.
 dimension_colors:
-  unauth_agents: "#40C5AF"    # green  — authentication coverage
-  xpia_email: "#EF6950"      # red    — XPIA email exfiltration risk
-  mcp_tools: "#409AE1"       # blue   — MCP tool exposure
-  knowledge_risk: "#b4a0ff"  # purple — knowledge source risk
-  credential_hygiene: "#FFC83D" # yellow — credential hygiene
+  broad_access: "#40C5AF"         # green  — Broad Access (allowForAllUsers)
+  xpia_email: "#EF6950"           # red    — XPIA Email Risk
+  tool_endpoint_exposure: "#409AE1" # blue — Tool & Endpoint Exposure (MCP + Q9 endpoints)
+  data_source_risk: "#b4a0ff"     # purple — Data Source Risk (declared knowledge sources)
+  credential_hygiene: "#FFC83D"   # yellow — Credential Hygiene
 
 # ─── Row Definitions ─────────────────────────────────────────────────────────
 # TOKEN-BUDGET LAYOUT: 5 rows, 12 widgets, ~1100px height
@@ -65,9 +67,10 @@ rows:
         fields:
           title: "AI Agent Security Posture Dashboard"
           subtitle_fields:
-            - platform                # e.g. "Copilot Studio"
+            - platform                # multi-platform → "Multiple (N platforms)"
             - analysis_period         # e.g. "2026-03-12 → 2026-03-19 (7 days)"
             - generation_date         # e.g. "2026-03-19"
+            - dcm_coverage            # Deep-Manifest (DCM) coverage %, e.g. "DCM 55%"
         style:
           title_align: center
           title_size: 26
@@ -80,47 +83,47 @@ rows:
     widgets:
       - type: score-card
         title: "Agent Security Score"
-        field: agent_security_score         # e.g. 38 (0–100, lower is better)
+        field: agent_security_score         # e.g. 64 (0–100, higher = worse)
         width_pct: 25
         ranges:
-          - { min: 0,  max: 25, color: score_rating_colors.healthy,    label: "Healthy" }
-          - { min: 26, max: 50, color: score_rating_colors.elevated,   label: "Elevated" }
-          - { min: 51, max: 75, color: score_rating_colors.concerning,  label: "Concerning" }
-          - { min: 76, max: 100, color: score_rating_colors.critical,   label: "Critical" }
+          - { min: 0,  max: 20, color: score_rating_colors.healthy,    label: "Healthy" }
+          - { min: 21, max: 45, color: score_rating_colors.elevated,   label: "Elevated" }
+          - { min: 46, max: 70, color: score_rating_colors.concerning, label: "Concerning" }
+          - { min: 71, max: 100, color: score_rating_colors.critical,  label: "Critical" }
         show_rating_label: true
 
       - type: kpi-card
         label: "Total Agents"
-        field: total_agents                 # from Key Metrics
+        field: total_agents                 # Key Metrics → Total Agents (non-deleted)
         unit: "agents"
         icon: "bot"
 
       - type: kpi-card
-        label: "Published"
-        field: published_agents             # from Key Metrics
+        label: "Broad Access"
+        field: broad_access_count           # Key Metrics → Broadly-Accessible Agents (allowForAllUsers)
         unit: "agents"
-        icon: "rocket"
-        highlight_color: palette.primary
+        icon: "globe"
+        highlight_color: palette.danger
 
       - type: kpi-card
         label: "XPIA Risk"
-        field: xpia_risk_count              # agents with GenAI + AI-controlled email
+        field: xpia_risk_count              # Key Metrics → Email-Capable Agents (XPIA Risk)
         unit: "agents"
         icon: "alert-triangle"
         highlight_color: palette.danger
 
       - type: kpi-card
-        label: "MCP Tools"
-        field: mcp_agent_count              # agents with MCP tools configured
+        label: "MCP Servers"
+        field: mcp_agent_count              # Key Metrics → Agents with MCP Servers
         unit: "agents"
         icon: "plug"
         highlight_color: palette.accent
 
       - type: kpi-card
-        label: "No Auth"
-        field: unauthenticated_count        # agents with no authentication
+        label: "Broad + Sensitive"
+        field: privilege_broad_sensitive_count   # Capability Privilege Index → broadly-accessible agents w/ sensitive (write/send) op
         unit: "agents"
-        icon: "shield-off"
+        icon: "key"
         highlight_color: palette.danger
 
   # ── ROW 3: Score Dimensions + Access Control ───────────────────────────────
@@ -138,27 +141,27 @@ rows:
         value_field: "score"
         max_value: 20
         bar_color_map:
-          "Unauth Agents": dimension_colors.unauth_agents
+          "Broad Access": dimension_colors.broad_access
           "XPIA Email Risk": dimension_colors.xpia_email
-          "MCP Tool Exposure": dimension_colors.mcp_tools
-          "Knowledge Risk": dimension_colors.knowledge_risk
+          "Tool & Endpoint Exposure": dimension_colors.tool_endpoint_exposure
+          "Data Source Risk": dimension_colors.data_source_risk
           "Credential Hygiene": dimension_colors.credential_hygiene
 
       - type: table-widget
         title: "XPIA Email Risk Agents"
-        field: xpia_risk_agents             # array of {agent, creator, inputs, access, sharepoint}
+        field: xpia_risk_agents             # array of {agent, platform, email_op, access}
         width_pct: 50
         columns:
-          - { header: "Agent",      field: "agent",     width: 30 }
-          - { header: "Inputs",     field: "inputs",    width: 25, badge: true }
-          - { header: "Access",     field: "access",    width: 20, badge: true }
-          - { header: "SharePoint", field: "sharepoint", width: 25 }
+          - { header: "Agent",    field: "agent",    width: 35 }
+          - { header: "Platform", field: "platform", width: 25 }
+          - { header: "Email Op", field: "email_op", width: 22 }
+          - { header: "Access",   field: "access",   width: 18, badge: true }
         max_items: 5
         badge_colors:
-          "AI-controlled": palette.danger
-          "Hardcoded": palette.success
-          "Any": palette.danger
-          "Group": palette.success
+          "All users": palette.danger
+          "Yes": palette.danger
+          "Scoped": palette.success
+          "No": palette.success
 
   # ── ROW 4: Tool Inventory + Knowledge Sources ─────────────────────────────
   - id: tools-and-knowledge
@@ -177,18 +180,18 @@ rows:
 
       - type: table-widget
         title: "Knowledge Sources"
-        field: knowledge_sources             # array of {agent, source_type, site, access}
+        field: knowledge_sources             # array of {agent, platform, access}
         width_pct: 55
         columns:
-          - { header: "Agent",   field: "agent",       width: 25 }
-          - { header: "Type",    field: "source_type", width: 20 }
-          - { header: "Site",    field: "site",        width: 35 }
-          - { header: "Access",  field: "access",      width: 20, badge: true }
+          - { header: "Agent",    field: "agent",    width: 50 }
+          - { header: "Platform", field: "platform", width: 28 }
+          - { header: "Access",   field: "access",   width: 22, badge: true }
         max_items: 6
         badge_colors:
-          "Any": palette.danger
-          "Group": palette.success
-          "Group membership": palette.success
+          "All users": palette.danger
+          "Yes": palette.danger
+          "Scoped": palette.success
+          "No": palette.success
 
   # ── ROW 5: Assessment + Recommendations ────────────────────────────────────
   - id: assessment-and-recs
@@ -225,26 +228,27 @@ data_sources:
   report_file: "reports/ai-agent-posture/AI_Agent_Posture_Report_*.md"
   field_mapping_notes: |
     # Row 1 — Title
-    platform: "Report header → Platform field (e.g. Copilot Studio)"
+    platform: "Report header → Platform field. Multi-platform reports → 'Multiple (N platforms)'"
     analysis_period: "Report header → Analysis Period field"
     generation_date: "Report header → Generated field"
+    dcm_coverage: "Key Metrics → Deep-Manifest (DCM) Coverage % (Q14). Render as 'DCM <pct>%'"
 
     # Row 2 — Score + KPIs
-    agent_security_score: "Agent Security Score Card → score value (0–100, lower = better)"
+    agent_security_score: "Agent Security Score Card → score value (0–100, HIGHER = worse). Bands: 0–20 Healthy, 21–45 Elevated, 46–70 Concerning, 71–100 Critical"
     total_agents: "Key Metrics → Total Agents (non-deleted)"
-    published_agents: "Key Metrics → Published Agents"
-    xpia_risk_count: "Key Metrics → Agents with GenAI + Email (XPIA Risk)"
-    mcp_agent_count: "Key Metrics → Agents with MCP Tools"
-    unauthenticated_count: "Key Metrics → Agents with No Authentication"
+    broad_access_count: "Key Metrics → Broadly-Accessible Agents (allowForAllUsers == true)"
+    xpia_risk_count: "Key Metrics → Email-Capable Agents (XPIA Risk)"
+    mcp_agent_count: "Key Metrics → Agents with MCP Servers"
+    privilege_broad_sensitive_count: "Capability Privilege Index section → count of broadly-accessible agents holding >=1 sensitive (write/send) operation (the 'B broad' figure). NOT summed into score — supplementary"
 
     # Row 3 — Dimensions + XPIA table
-    score_dimensions: "Agent Security Score Card → Dimension Breakdown table (5 rows: dimension, score/20)"
-    xpia_risk_agents: "XPIA Email Exfiltration Risk table → agent, inputs AI-controlled, access policy, SharePoint source"
+    score_dimensions: "Agent Security Score Card → Dimension Breakdown (5 rows, score/20). Labels MUST be: Broad Access, XPIA Email Risk, Tool & Endpoint Exposure, Data Source Risk, Credential Hygiene"
+    xpia_risk_agents: "XPIA Email Exfiltration Risk table → columns: agent, platform, email_op (send-email operation name), access (Broadly Accessible: 'All users' for allowForAllUsers==true else 'Scoped'). Show the broadly-accessible (dangerous) subset first"
 
     # Row 4 — Tools + Knowledge
-    tool_distribution: "Full Tools Inventory → Tool Distribution Summary (tool kind × agent count)"
-    knowledge_sources: "Knowledge Source Exposure → Complete Knowledge Source Listing table"
+    tool_distribution: "Full Capability / Tools Inventory → top operations (operation/tool kind × agent count). May also use Capability Privilege Index distribution"
+    knowledge_sources: "Declared Data Source Exposure → columns: agent, platform, access (Broadly Accessible: 'All users' for allowForAllUsers==true else 'Scoped'). AgentsInfo has no source-type/site name detail — do NOT add Type/Site columns"
 
     # Row 5 — Assessment + Recommendations
-    overall_assessment: "Security Assessment table → overall risk rating with detail text"
-    recommendations: "Recommendations section → top 3 action items with priority levels (🔴=high, 🟠=medium, 🟡=low)"
+    overall_assessment: "Security Assessment table → overall risk rating with detail text. IMPORTANT: include the Runtime Correlation 'active-and-dangerous' finding (Q15) in the detail — name the broadly-accessible agent(s) confirmed active in CopilotActivity, or note 'no flagged agents active in window (low-coverage caveat)'"
+    recommendations: "Recommendations section → top 3 action items with priority levels (🔴=high, 🟠=medium, 🟡=low). Prioritize broad+sensitive (Privilege Index) and runtime-active agents"

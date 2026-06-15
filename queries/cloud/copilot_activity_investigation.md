@@ -27,11 +27,11 @@ This file reconstructs AI activity for incident response using the **scope → c
 | Table | Scope | Platform | Use when |
 |-------|-------|----------|----------|
 | **`CopilotActivity`** (this file) | **All** Copilot/AI surfaces (M365, Security Copilot, Studio agents, autonomous) | AH ≤30d / Data Lake 90d | General AI-activity reconstruction, jailbreak/data-exposure hunting |
-| `AIAgentsInfo` | Static **configuration** snapshots of declarative agents | AH only (Preview) | Agent posture audit (auth, knowledge, tools as *configured*) — see `ai-agent-posture` skill |
+| `AgentsInfo` | Static **configuration** snapshots of declarative agents | AH only | Agent posture audit (access, data sources, tools as *configured*) — see `ai-agent-posture` skill |
 | `UnifiedAgentObservability` | Agent 365 / A365 runtime tool-call telemetry | Data Lake only (`workspaceId: "default"`) | Deep agentic tool-call forensics — see `agent365_observability.md` |
 | `CloudAppEvents` (`CopilotInteraction`) | Security Copilot subset via unified audit | AH / Data Lake | Security-Copilot-only views — see `security_copilot_utilization.md` |
 
-**Decision rule:** Start here (`CopilotActivity`) for breadth across all AI surfaces. Drill into `AIAgentsInfo` for configuration posture, `UnifiedAgentObservability` for agentic tool-call depth.
+**Decision rule:** Start here (`CopilotActivity`) for breadth across all AI surfaces. Drill into `AgentsInfo` for configuration posture, `UnifiedAgentObservability` for agentic tool-call depth.
 
 ---
 
@@ -45,7 +45,7 @@ This file reconstructs AI activity for incident response using the **scope → c
 | **`LLMEventData` must be parsed in AH before `mv-expand`** | `LLMEventData` is a dynamic column. In Advanced Hunting, sub-arrays (`Messages`, `AccessedResources`, `Contexts`, `Resource`) come through as strings — wrap with `parse_json(tostring(LLMEventData.X))` **before** `mv-expand`, or you get `expanded expression expected to have dynamic type`. |
 | **Schema differs by `RecordType` / `AppHost`** | The shape of `LLMEventData.AccessedResources` depends on the record type: **`CopilotInteraction`** → file/data reads (`SiteUrl`, `Type` = `docx`/`pdf`/`xlsx`/`EmailMessage`/`CITATION`) AND Defender runtime-protection evaluations (`Type` = `SecurityWebhook`). **`Autonomous`** (agentic) → connector/MCP tool invocations (`Type` = `Connector`). Always filter by `RecordType`/`AppHost` first, then extract the shape you expect. |
 | **`Contexts.Type` is frequently EMPTY** | For many `CopilotInteraction` records (notably Security Copilot), `Contexts[]` contains only `Id` (e.g. the app origin URL) with an empty `Type`. **Real resource/data access lives in `AccessedResources[]`, not `Contexts[]`.** Do not rely on `Contexts.Type` for data-exposure analysis. |
-| **`AgentId`/`AgentName` only populated for declarative agents** | These are the join keys to `AIAgentsInfo.AIAgentId`. They are empty for plain M365 Copilot chat. Filter `isnotempty(AgentId)` when correlating to configured agents. |
+| **`AgentId`/`AgentName` only populated for declarative agents** | These are the join keys to `AgentsInfo.AgentId` (a guid). They are empty for plain M365 Copilot chat. Filter `isnotempty(AgentId)` when correlating to configured agents. `AgentsInfo` also exposes `ObservabilityID` for runtime correlation. |
 | **Synthetic service identities & egress IPs dominate volume** | Security Copilot generates high-volume synthetic actors (e.g. `SecurityCopilotAgentUser-*` UPNs) and on-behalf-of egress from fixed Azure IPs. These dwarf human activity in count-based queries. **Filter them out** before anomaly/volume analysis (see Q9) or they produce false positives. |
 | **Compliance violations live in `DataSecurityEvents`, not `CopilotActivity`** | `CopilotActivity` records *that* an interaction happened and *what resources* it touched, but it does not classify content sensitivity or policy violations. Purview-derived signals — risky prompts, sensitive responses, DLP alerts, label downgrades, inappropriate/regulated content — are emitted to **`DataSecurityEvents`** (AH-only, requires Insider Risk Management opt-in). The Hunt Playbook below pairs the two tables; see Q13 and the `data-security-analysis` skill. |
 
@@ -210,7 +210,7 @@ CopilotActivity
 
 ### Query 5: Autonomous Agent Runtime Tool Invocations
 
-**Purpose:** For **agentic / autonomous** Copilot flows, `AccessedResources` records each connector/MCP tool the agent invoked at runtime (`Type = Connector`). This reveals the *actual* capabilities an autonomous agent exercised — e.g. mail, calendar, SharePoint, OneDrive, Teams MCP servers — as opposed to what it was merely *configured* with (`AIAgentsInfo`).  
+**Purpose:** For **agentic / autonomous** Copilot flows, `AccessedResources` records each connector/MCP tool the agent invoked at runtime (`Type = Connector`). This reveals the *actual* capabilities an autonomous agent exercised — e.g. mail, calendar, SharePoint, OneDrive, Teams MCP servers — as opposed to what it was merely *configured* with (`AgentsInfo`).  
 **Severity:** Low  
 **MITRE:** T1530, T1071.001
 
@@ -278,7 +278,7 @@ CopilotActivity
 
 ### Query 7: Declarative Agent Adoption
 
-**Purpose:** Bridges configuration and runtime. Lists declarative agents (by `AgentId`/`AgentName`) that actually produced activity, with their user reach and surfaces. Join `AgentId` to `AIAgentsInfo.AIAgentId` to find **configured-but-dormant** agents (in `AIAgentsInfo`, absent here) and **active** agents (present here) — see the `ai-agent-posture` skill Phase 5.  
+**Purpose:** Bridges configuration and runtime. Lists declarative agents (by `AgentId`/`AgentName`) that actually produced activity, with their user reach and surfaces. Join `AgentId` to `AgentsInfo.AgentId` to find **configured-but-dormant** agents (in `AgentsInfo`, absent here) and **active** agents (present here) — see the `ai-agent-posture` skill Phase 5.  
 **Severity:** Informational  
 **MITRE:** TA0007
 
@@ -518,14 +518,14 @@ DataSecurityEvents
 2. **Context** — Run Q4 to see what data Copilot read; Q5 for autonomous-agent tool invocations; Q6 for Defender runtime-protection evaluations; Q7 to map active declarative agents.
 3. **Signal** — Run Q8 (jailbreak) as the priority security signal, Q13 for compliance violations, Q9 for volume anomalies, Q10/Q11 for plugin/PromptBook tampering.
 4. **Pivot** — For any flagged actor, run Q12 to reconstruct their full AI timeline, then cross-reference accessed resources (Q4 scoped to the actor).
-5. **Correlate to configuration** — For any flagged `AgentId`, pivot to the `ai-agent-posture` skill (`AIAgentsInfo`) to compare runtime behavior against configured auth, knowledge sources, and tools.
+5. **Correlate to configuration** — For any flagged `AgentId`, pivot to the `ai-agent-posture` skill (`AgentsInfo`) to compare runtime behavior against configured access, data sources, and tools.
 
 > **Just want the broad sweep?** Use the [Hunt Playbook — 7-Day Broad Sweep](#-hunt-playbook--7-day-broad-sweep) near the top — it sequences the signal queries (Q8 → Q13 → Q9 → Q10/Q11 → Q6) with escalation triggers and pivots.
 
 ## Related
 
 - **[Reconstructing AI activity in investigations](https://www.microsoft.com/en-us/security/blog/2026/06/09/reconstructing-ai-activity-investigations/)** (Microsoft Security blog, 2026-06-09) — source of the scope → context → signal methodology this file is structured on.
-- **`ai-agent-posture` skill** — static configuration audit of declarative agents (`AIAgentsInfo`); see its Phase 5 for runtime correlation back to this file.
+- **`ai-agent-posture` skill** — static configuration audit of declarative agents (`AgentsInfo`); see its Phase 5 for runtime correlation back to this file.
 - **`data-security-analysis` skill** — deep DLP / sensitive-information-type / sensitivity-label analysis over `DataSecurityEvents` (the table behind Q13).
 - **`agent365_observability.md`** — deeper agentic tool-call telemetry (`UnifiedAgentObservability`, Data Lake only).
 - **`security_copilot_utilization.md`** — Security-Copilot-specific utilization via `CloudAppEvents`.
