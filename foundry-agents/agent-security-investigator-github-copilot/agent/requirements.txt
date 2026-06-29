@@ -1,0 +1,18 @@
+# "Bring your own harness" hosted agent: the GitHub Copilot SDK is the agent
+# reasoning engine; azure-ai-agentserver-responses is only the Foundry hosted
+# Responses HTTP contract (port 8088, readiness, SSE). No agent-framework.
+
+# Foundry hosted Responses server (the platform HTTP host we subclass).
+azure-ai-agentserver-responses>=1.0.0b7
+
+# The harness: GitHub Copilot SDK. The wheel is a platform wheel that bundles
+# the native Copilot CLI binary (manylinux x86_64) — no Node required. ACR
+# remoteBuild builds linux/amd64, so the correct binary is installed.
+github-copilot-sdk>=1.0.2
+
+# Entra auth for the Azure OpenAI provider (BYOK) and the Toolbox MCP bearer.
+azure-identity
+python-dotenv
+
+# Debug support (Foundry Toolkit guidance).
+debugpy

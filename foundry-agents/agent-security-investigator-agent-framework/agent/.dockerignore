@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.env.*
+.azure/
+.git/
+.vscode/
+.mypy_cache/
+.pytest_cache/
+
+# Local-only test fixtures and generated reports are not needed by the hosted runtime.
+skills/**/test-data/
+reports/
+temp/

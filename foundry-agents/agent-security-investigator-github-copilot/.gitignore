@@ -1,0 +1,8 @@
+.azure
+
+# Local env files (keep .env.example tracked)
+.env
+**/.env
+
+# azd / deploy logs
+*.log

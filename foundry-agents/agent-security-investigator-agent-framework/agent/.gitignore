@@ -1,0 +1,8 @@
+# Skills, manifests, and queries are synced into this agent's root from the
+# repository-root .github/ and queries/ by deploy.sh (sync_github_assets). The
+# root repo is the single source of truth; these copies exist only so the
+# Dockerfile can bundle them into the hosted-agent image (COPY . user_agent/).
+# Never commit them here — they would duplicate the root tree and drift.
+skills/
+manifests/
+queries/

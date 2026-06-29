@@ -1,0 +1,18 @@
+# Azure AI Agent Framework harness variant.
+#
+# Runtime pieces used by main.py. Avoid the broad agent-framework meta package,
+# which pulls every provider adapter into the hosted image.
+agent-framework-core>=1.9.0
+agent-framework-foundry>=1.8.2
+# Foundry hosted Responses server bridge for agent-framework Agents.
+agent-framework-foundry-hosting
+# Required by agent-framework-foundry-hosting and by MCPStreamableHTTPTool.
+mcp>=1.24.0
+
+# Entra auth + Toolbox MCP HTTP client.
+azure-identity
+httpx
+python-dotenv
+
+# Debug support (Foundry Toolkit guidance).
+debugpy
