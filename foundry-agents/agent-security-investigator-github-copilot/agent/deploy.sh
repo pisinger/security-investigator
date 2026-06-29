@@ -263,22 +263,24 @@ prereqs() {
 }
 
 # Shared assets copied from the repository root into this agent's tree so they are
-# bundled with the hosted-agent image. Each path is repo-root-relative and is
-# mirrored to the SAME relative path under $SCRIPT_DIR. The repo root is the single
-# source of truth; these copies live here only so the Dockerfile can COPY them.
+# bundled with the hosted-agent image. Each entry maps a repo-root-relative SOURCE
+# to a $SCRIPT_DIR-relative DEST. Unlike the agent-framework agent, this agent reads
+# skills/manifests from .github/, so they land under .github/ here. The repo root is
+# the single source of truth; these copies live here only so the Dockerfile can COPY
+# them.
 SYNCED_ASSETS=(
-    ".github/skills:skills"
-    ".github/manifests:manifests"
+    ".github/skills:.github/skills"
+    ".github/manifests:.github/manifests"
     "queries:queries"
     "config.json.template:config.json.template"
     "config.json:config.json"
 )
 
-# Mirror SYNCED_ASSET_PATHS from the repository root into $SCRIPT_DIR. The repo root
-# is the nearest ancestor of this script whose .github carries a skills/ or
-# manifests/ tree (this agent's own .github does not, until this runs). In a
-# bootstrapped azd wrapper the repo root is absent — the assets were already merged
-# in at bootstrap time — so this becomes a no-op and the bundled copies stand.
+# Mirror SYNCED_ASSETS from the repository root into $SCRIPT_DIR. The repo root is
+# the nearest ancestor of this script whose .github carries a skills/ or manifests/
+# tree (this agent's own .github does not, until this runs). In a bootstrapped azd
+# wrapper the repo root is absent — the assets were already merged in at bootstrap
+# time — so this becomes a no-op and the bundled copies stand.
 sync_github_assets() {
     local root="" dir
     dir="$(dirname "$SCRIPT_DIR")"
@@ -294,17 +296,18 @@ sync_github_assets() {
         return 0
     fi
 
-    local rel src dst
-    for rel in "${SYNCED_ASSET_PATHS[@]}"; do
-        src="$root/$rel"
-        dst="$SCRIPT_DIR/$rel"
+    local entry src_rel dst_rel src dst
+    for entry in "${SYNCED_ASSETS[@]}"; do
+        src_rel="${entry%%:*}"; dst_rel="${entry#*:}"
+        src="$root/$src_rel"
+        dst="$SCRIPT_DIR/$dst_rel"
         if [[ -f "$src" ]]; then
             mkdir -p "$(dirname "$dst")"
             cp -f "$src" "$dst"
-            log "Synced ${rel} from ${src} into ${dst}."
+            log "Synced ${src_rel} from ${src} into ${dst}."
             continue
         fi
-        [[ -d "$src" ]] || { warn "Source ${src} not found; skipping ${rel}."; continue; }
+        [[ -d "$src" ]] || { warn "Source ${src} not found; skipping ${dst_rel}."; continue; }
         mkdir -p "$dst"
         if command -v rsync >/dev/null 2>&1; then
             rsync -a --delete \
@@ -314,7 +317,7 @@ sync_github_assets() {
             rm -rf "$dst"; mkdir -p "$dst"
             cp -r "$src/." "$dst/"
         fi
-        log "Synced ${rel} from ${src} into ${dst}."
+        log "Synced ${src_rel} from ${src} into ${dst}."
     done
 }
 
