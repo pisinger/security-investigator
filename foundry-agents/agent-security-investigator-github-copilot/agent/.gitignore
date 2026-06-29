@@ -6,3 +6,5 @@
 .github/skills/
 .github/manifests/
 queries/
+config.json.template
+config.json

@@ -6,3 +6,5 @@
 skills/
 manifests/
 queries/
+config.json.template
+config.json

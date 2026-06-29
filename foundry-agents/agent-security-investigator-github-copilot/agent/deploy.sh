@@ -266,7 +266,13 @@ prereqs() {
 # bundled with the hosted-agent image. Each path is repo-root-relative and is
 # mirrored to the SAME relative path under $SCRIPT_DIR. The repo root is the single
 # source of truth; these copies live here only so the Dockerfile can COPY them.
-SYNCED_ASSET_PATHS=(.github/skills .github/manifests queries)
+SYNCED_ASSETS=(
+    ".github/skills:skills"
+    ".github/manifests:manifests"
+    "queries:queries"
+    "config.json.template:config.json.template"
+    "config.json:config.json"
+)
 
 # Mirror SYNCED_ASSET_PATHS from the repository root into $SCRIPT_DIR. The repo root
 # is the nearest ancestor of this script whose .github carries a skills/ or
@@ -292,6 +298,12 @@ sync_github_assets() {
     for rel in "${SYNCED_ASSET_PATHS[@]}"; do
         src="$root/$rel"
         dst="$SCRIPT_DIR/$rel"
+        if [[ -f "$src" ]]; then
+            mkdir -p "$(dirname "$dst")"
+            cp -f "$src" "$dst"
+            log "Synced ${rel} from ${src} into ${dst}."
+            continue
+        fi
         [[ -d "$src" ]] || { warn "Source ${src} not found; skipping ${rel}."; continue; }
         mkdir -p "$dst"
         if command -v rsync >/dev/null 2>&1; then

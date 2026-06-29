@@ -274,6 +274,8 @@ SYNCED_ASSETS=(
     ".github/skills:skills"
     ".github/manifests:manifests"
     "queries:queries"
+    "config.json.template:config.json.template"
+    "config.json:config.json"
 )
 
 # Mirror SYNCED_ASSETS from the repository root into $SCRIPT_DIR. The repo root is
@@ -301,6 +303,12 @@ sync_github_assets() {
         src_rel="${entry%%:*}"; dst_rel="${entry#*:}"
         src="$root/$src_rel"
         dst="$SCRIPT_DIR/$dst_rel"
+        if [[ -f "$src" ]]; then
+            mkdir -p "$(dirname "$dst")"
+            cp -f "$src" "$dst"
+            log "Synced ${src_rel} from ${src} into ${dst}."
+            continue
+        fi
         [[ -d "$src" ]] || { warn "Source ${src} not found; skipping ${dst_rel}."; continue; }
         mkdir -p "$dst"
         if command -v rsync >/dev/null 2>&1; then
